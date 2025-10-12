@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>論理回路シミュレーター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; overscroll-behavior: none; touch-action: none; }
+        .component-palette-item { cursor: grab; user-select: none; }
+        .component { cursor: move; user-select: none; }
+        .gate-symbol { fill: #374151; stroke: #9ca3af; stroke-width: 2; }
+        .node { cursor: crosshair; transition: all 0.1s ease; }
+        .node:hover { stroke: #3b82f6; stroke-width: 3; }
+        .wire { cursor: pointer; }
+        .wire-high { stroke: #ef4444; }
+        .wire-low { stroke: #3b82f6; }
+        .node-high { fill: #ef4444; }
+        .node-low { fill: #3b82f6; }
+        .led-on { fill: #facc15; stroke: #f59e0b; filter: drop-shadow(0 0 5px #facc15); }
+        .led-off { fill: #4b5563; stroke: #1f2937; }
+        #circuit-canvas.wiring { cursor: crosshair; }
+        #selection-box { fill: rgba(59, 130, 246, 0.2); stroke: rgba(59, 130, 246, 0.8); stroke-width: 1; }
+        .selected .gate-symbol, .selected rect { stroke: #22d3ee; stroke-width: 3; }
+        .text-component { font-size: 16px; fill: #e5e7eb; cursor: move; pointer-events: none; }
+        .text-component-bg { fill: transparent; }
+        .ghost-component { position: absolute; background-color: rgba(59, 130, 246, 0.7); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; pointer-events: none; z-index: 1000; }
+    </style>
+</head>
+<body class="bg-gray-800 text-white flex flex-col md:flex-row h-screen overflow-hidden">
+
+    <!-- Component Palette -->
+    <div id="component-palette" class="w-full md:w-48 bg-gray-900 p-4 space-y-4 overflow-y-auto flex-shrink-0">
+        <h2 class="text-lg font-bold text-center border-b border-gray-700 pb-2">コンポーネント</h2>
+        <div class="space-y-3">
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="INPUT" draggable="true">入力スイッチ</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="OUTPUT" draggable="true">LED</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="AND" draggable="true">AND</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="OR" draggable="true">OR</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="NOT" draggable="true">NOT</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="NAND" draggable="true">NAND</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="NOR" draggable="true">NOR</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="XOR" draggable="true">XOR</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="HALF_ADDER" draggable="true">半加算回路</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="FULL_ADDER" draggable="true">全加算回路</div>
+            <div class="component-palette-item bg-gray-700 p-2 rounded-lg text-center shadow-md hover:bg-gray-600 transition-colors" data-type="TEXT" draggable="true">テキスト</div>
+        </div>
+        <div class="pt-4 space-y-2">
+            <button id="save-button" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">回路を保存</button>
+            <button id="load-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">回路を開く</button>
+            <button id="clear-button" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">全消去</button>
+        </div>
+        <div class="pt-4 text-xs text-gray-400">
+            <h3 class="font-bold mb-2">使い方:</h3>
+            <ul class="list-disc list-inside space-y-1">
+                <li>部品をドラッグ＆ドロップ (PC) またはタップ＆ドラッグ (スマホ) します。</li>
+                <li>部品をドラッグして移動できます。</li>
+                <li>背景をドラッグして範囲選択できます。</li>
+                <li>丸い端子をタップ/クリックして配線を開始/終了します。</li>
+                <li>スイッチ本体をタップ/クリックしてON/OFFを切り替えます。</li>
+                <li>テキストはダブルクリックで編集できます。</li>
+                <li>部品や配線を右クリックまたは長押しで削除します。</li>
+                <li>Deleteキーで選択中の部品を削除できます。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Circuit Canvas -->
+    <div class="flex-grow bg-gray-800 relative">
+        <svg id="circuit-canvas" class="w-full h-full"></svg>
+        <input type="file" id="load-input" class="hidden" accept=".json">
+    </div>
+    
+    <!-- Text Edit Modal -->
+    <div id="text-modal" class="hidden absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-700 p-4 rounded-lg shadow-lg w-1/3">
+            <h3 class="text-lg mb-2">テキストを編集</h3>
+            <input type="text" id="text-modal-input" class="bg-gray-800 text-white rounded p-2 w-full">
+            <div class="mt-4 flex justify-end space-x-2">
+                <button id="text-modal-cancel" class="bg-gray-500 hover:bg-gray-600 px-4 py-2 rounded">キャンセル</button>
+                <button id="text-modal-ok" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const svg = document.getElementById('circuit-canvas');
+            const palette = document.getElementById('component-palette');
+            const clearButton = document.getElementById('clear-button');
+            const saveButton = document.getElementById('save-button');
+            const loadButton = document.getElementById('load-button');
+            const loadInput = document.getElementById('load-input');
+            const textModal = document.getElementById('text-modal');
+            const textModalInput = document.getElementById('text-modal-input');
+            const textModalOk = document.getElementById('text-modal-ok');
+            const textModalCancel = document.getElementById('text-modal-cancel');
+
+            let components = {};
+            let wires = [];
+            let nextId = 0;
+            let snapGridSize = 20;
+            let selectedComponentIds = new Set();
+            let currentEditingTextId = null;
+            let lastClickInfo = { time: 0, targetId: null };
+            
+            let state = {
+                action: 'none',
+                dragStart: { x: 0, y: 0 },
+                initialPositions: new Map(),
+                selectionBox: null,
+                wiring: { startNodeInfo: null, tempLine: null },
+                isClick: true,
+                longPressTimer: null,
+            };
+            
+            let ghostElement = null;
+            let ghostDataType = null;
+
+            const componentDefs = {
+                INPUT: { type: 'INPUT', width: 60, height: 40, inputs: [], outputs: [{ id: 'out', x: 60, y: 20 }] },
+                OUTPUT: { type: 'OUTPUT', width: 60, height: 40, inputs: [{ id: 'in', x: 0, y: 20 }], outputs: [] },
+                AND: { type: 'AND', width: 80, height: 60, inputs: [{ id: 'in1', x: 0, y: 15 }, { id: 'in2', x: 0, y: 45 }], outputs: [{ id: 'out', x: 80, y: 30 }] },
+                OR: { type: 'OR', width: 80, height: 60, inputs: [{ id: 'in1', x: 10, y: 15 }, { id: 'in2', x: 10, y: 45 }], outputs: [{ id: 'out', x: 80, y: 30 }] },
+                NOT: { type: 'NOT', width: 80, height: 40, inputs: [{ id: 'in1', x: 0, y: 20 }], outputs: [{ id: 'out', x: 80, y: 20 }] },
+                NAND: { type: 'NAND', width: 90, height: 60, inputs: [{ id: 'in1', x: 0, y: 15 }, { id: 'in2', x: 0, y: 45 }], outputs: [{ id: 'out', x: 90, y: 30 }] },
+                NOR: { type: 'NOR', width: 90, height: 60, inputs: [{ id: 'in1', x: 10, y: 15 }, { id: 'in2', x: 10, y: 45 }], outputs: [{ id: 'out', x: 90, y: 30 }] },
+                XOR: { type: 'XOR', width: 80, height: 60, inputs: [{ id: 'in1', x: 10, y: 15 }, { id: 'in2', x: 10, y: 45 }], outputs: [{ id: 'out', x: 80, y: 30 }] },
+                HALF_ADDER: { type: 'HALF_ADDER', width: 80, height: 80, inputs: [{ id: 'in_a', x: 0, y: 20 }, { id: 'in_b', x: 0, y: 60 }], outputs: [{ id: 'out_c', x: 80, y: 20 }, { id: 'out_s', x: 80, y: 60 }] },
+                FULL_ADDER: { type: 'FULL_ADDER', width: 80, height: 100, inputs: [{ id: 'in_a', x: 0, y: 20 }, { id: 'in_b', x: 0, y: 50 }, { id: 'in_cin', x: 0, y: 80 }], outputs: [{ id: 'out_cout', x: 80, y: 35 }, { id: 'out_s', x: 80, y: 65 }] },
+                JUNCTION: { type: 'JUNCTION', width: 20, height: 20, inputs: [{ id: 'in', x: 10, y: 10 }], outputs: [{ id: 'out', x: 10, y: 10 }] },
+                TEXT: { type: 'TEXT', width: 80, height: 20, text: 'テキスト', inputs: [], outputs: [] },
+            };
+
+            const logic = {
+                INPUT: (comp) => ({ out: comp.state }),
+                AND: (inputs) => ({ out: inputs.every(val => val === 1) ? 1 : 0 }),
+                OR: (inputs) => ({ out: inputs.some(val => val === 1) ? 1 : 0 }),
+                NOT: (inputs) => ({ out: inputs[0] === 1 ? 0 : 1 }),
+                NAND: (inputs) => ({ out: !(inputs.every(val => val === 1)) ? 1 : 0 }),
+                NOR: (inputs) => ({ out: !(inputs.some(val => val === 1)) ? 1 : 0 }),
+                XOR: (inputs) => ({ out: (inputs.filter(val => val === 1).length % 2) === 1 ? 1 : 0 }),
+                HALF_ADDER: (inputs) => {
+                    const a = inputs[0] || 0;
+                    const b = inputs[1] || 0;
+                    const sum = (a + b) % 2;
+                    const carry = (a === 1 && b === 1) ? 1 : 0;
+                    return { out_s: sum, out_c: carry };
+                },
+                FULL_ADDER: (inputs) => {
+                    const a = inputs[0] || 0;
+                    const b = inputs[1] || 0;
+                    const cin = inputs[2] || 0;
+                    const sum = (a + b + cin) % 2;
+                    const cout = (a + b + cin) >= 2 ? 1 : 0;
+                    return { out_s: sum, out_cout: cout };
+                },
+                JUNCTION: (inputs) => ({ out: inputs[0] || 0 }),
+            };
+            
+            function createSVGElement(tag, attributes = {}) {
+                const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+                for (const [key, value] of Object.entries(attributes)) {
+                    el.setAttribute(key, value);
+                }
+                return el;
+            }
+
+            function draw() {
+                svg.innerHTML = '';
+                
+                Object.values(wires).forEach(wire => {
+                    const startComp = components[wire.startComponentId];
+                    const endComp = components[wire.endComponentId];
+                    if (!startComp || !endComp) return;
+                    const startNode = startComp.outputs.find(o => o.id === wire.startNodeId);
+                    const endNode = endComp.inputs.find(i => i.id === wire.endNodeId);
+                    if (!startNode || !endNode) return;
+                    const x1 = startComp.x + startNode.x, y1 = startComp.y + startNode.y;
+                    const x2 = endComp.x + endNode.x, y2 = endComp.y + endNode.y;
+                    const line = createSVGElement('line', { x1, y1, x2, y2, 'stroke-width': '2.5' });
+                    line.classList.add('wire', startNode.value === 1 ? 'wire-high' : 'wire-low');
+                    line.dataset.id = wire.id;
+                    svg.appendChild(line);
+                });
+
+                Object.values(components).forEach(comp => {
+                    const g = createSVGElement('g', { transform: `translate(${comp.x}, ${comp.y})` });
+                    g.classList.add('component');
+                    if (selectedComponentIds.has(comp.id)) g.classList.add('selected');
+                    g.dataset.id = comp.id;
+
+                    let body;
+                    if (comp.type === 'INPUT' || comp.type === 'OUTPUT' || comp.type === 'HALF_ADDER' || comp.type === 'FULL_ADDER') {
+                        body = createSVGElement('rect', { width: comp.width, height: comp.height, rx: 8, fill: '#374151', stroke: '#4b5563', 'stroke-width': 2 });
+                    } else if (comp.type === 'TEXT') {
+                        // Text has a special body for interaction
+                    } else if (comp.type === 'JUNCTION') {
+                        body = createSVGElement('circle', { cx: comp.width/2, cy: comp.height/2, r: 3, fill: '#9ca3af'});
+                        body.classList.add('gate-symbol'); // Re-use class for selection highlight
+                    } else {
+                        body = createGateSymbol(comp);
+                    }
+                    if (body) g.appendChild(body);
+                    
+                    if (comp.type === 'INPUT') {
+                        const text = createSVGElement('text', { x: comp.width / 2, y: comp.height / 2 + 5, 'text-anchor': 'middle', fill: 'white', 'pointer-events': 'none' });
+                        text.textContent = `[ ${comp.state} ]`;
+                        g.appendChild(text);
+                    } else if (comp.type === 'OUTPUT') {
+                        const led = createSVGElement('circle', { cx: comp.width / 2, cy: comp.height / 2, r: 12, 'stroke-width': 3 });
+                        led.classList.add(comp.inputs[0].value === 1 ? 'led-on' : 'led-off');
+                        g.appendChild(led);
+                    } else if (comp.type === 'HALF_ADDER') {
+                        const text = createSVGElement('text', { x: comp.width / 2, y: comp.height / 2 + 5, 'text-anchor': 'middle', fill: 'white', 'pointer-events': 'none' });
+                        text.textContent = 'HA';
+                        g.appendChild(text);
+                        const textC = createSVGElement('text', { x: comp.width - 15, y: 15, 'text-anchor': 'middle', fill: '#a0a0a0', 'font-size': '12px', 'pointer-events': 'none' });
+                        textC.textContent = 'C';
+                        g.appendChild(textC);
+                        const textS = createSVGElement('text', { x: comp.width - 15, y: comp.height - 10, 'text-anchor': 'middle', fill: '#a0a0a0', 'font-size': '12px', 'pointer-events': 'none' });
+                        textS.textContent = 'S';
+                        g.appendChild(textS);
+                    } else if (comp.type === 'FULL_ADDER') {
+                        const text = createSVGElement('text', { x: comp.width / 2, y: comp.height / 2 + 5, 'text-anchor': 'middle', fill: 'white', 'pointer-events': 'none' });
+                        text.textContent = 'FA';
+                        g.appendChild(text);
+                        const textCout = createSVGElement('text', { x: comp.width - 25, y: 30, 'text-anchor': 'middle', fill: '#a0a0a0', 'font-size': '12px', 'pointer-events': 'none' });
+                        textCout.textContent = 'Cout';
+                        g.appendChild(textCout);
+                        const textS = createSVGElement('text', { x: comp.width - 15, y: 70, 'text-anchor': 'middle', fill: '#a0a0a0', 'font-size': '12px', 'pointer-events': 'none' });
+                        textS.textContent = 'S';
+                        g.appendChild(textS);
+                    } else if (comp.type === 'TEXT') {
+                        const textEl = createSVGElement('text', { x: 0, y: 15, 'text-anchor': 'start' });
+                        textEl.textContent = comp.text;
+                        textEl.classList.add('text-component');
+                        g.appendChild(textEl);
+                        const bbox = {width: comp.width, height: comp.height};
+                        const bgRect = createSVGElement('rect', {x: 0, y: 0, width: bbox.width, height: bbox.height});
+                        bgRect.classList.add('text-component-bg');
+                        g.insertBefore(bgRect, textEl);
+                    }
+
+                    [...comp.inputs, ...comp.outputs].forEach(node => {
+                        const nodeType = comp.inputs.some(n => n.id === node.id) ? 'input' : 'output';
+                        let isConnectable = false;
+                        if (state.action === 'wiring' && state.wiring.startNodeInfo) {
+                            const startInfo = state.wiring.startNodeInfo;
+                            if (startInfo.componentId !== comp.id && startInfo.nodeType !== nodeType) {
+                                isConnectable = (nodeType === 'input' && !node.connected) || nodeType === 'output';
+                            }
+                        }
+
+                        const circle = createSVGElement('circle', { 
+                            cx: node.x, 
+                            cy: node.y, 
+                            r: isConnectable ? 8 : 5,
+                            fill: isConnectable ? '#facc15' : (node.value === 1 ? '#ef4444' : '#3b82f6')
+                        });
+                        
+                        circle.classList.add('node');
+                        circle.dataset.componentId = comp.id;
+                        circle.dataset.nodeId = node.id;
+                        circle.dataset.nodeType = nodeType;
+                        g.appendChild(circle);
+                    });
+
+                    g.addEventListener('contextmenu', (e) => { e.preventDefault(); deleteComponent(comp.id); });
+                    svg.appendChild(g);
+                });
+
+                if (state.selectionBox) svg.appendChild(state.selectionBox);
+                if (state.wiring.tempLine) svg.appendChild(state.wiring.tempLine);
+            }
+
+            function createGateSymbol(comp) {
+                const g = createSVGElement('g');
+                const w = comp.width, h = comp.height;
+                let d = '';
+                switch (comp.type) {
+                    case 'AND': d = `M 0 0 L 0 ${h} L ${w/2} ${h} A ${h/2} ${h/2} 0 0 0 ${w/2} 0 Z`; break;
+                    case 'OR': case 'XOR':
+                        d = `M 10 0 Q ${w*0.4} ${h/2}, 10 ${h} L ${w*0.5} ${h} Q ${w} ${h/2}, ${w*0.5} 0 Z`;
+                        if (comp.type === 'XOR') {
+                            const xorPath = createSVGElement('path', { d: `M 0 0 Q ${w*0.3} ${h/2}, 0 ${h}`, fill: 'none' });
+                            xorPath.classList.add('gate-symbol');
+                            g.appendChild(xorPath);
+                        }
+                        break;
+                    case 'NOT': d = `M 0 0 L ${w-10} ${h/2} L 0 ${h} Z`; break;
+                    case 'NAND': d = `M 0 0 L 0 ${h} L ${(w-10)/2} ${h} A ${h/2} ${h/2} 0 0 0 ${(w-10)/2} 0 L 0 0 Z`; break;
+                    case 'NOR': d = `M 10 0 Q ${(w-10)*0.4} ${h/2}, 10 ${h} L ${(w-10)*0.5} ${h} Q ${w-10} ${h/2}, ${(w-10)*0.5} 0 Z`; break;
+                }
+                const path = createSVGElement('path', { d });
+                path.classList.add('gate-symbol');
+                g.appendChild(path);
+
+                if (['NOT', 'NAND', 'NOR'].includes(comp.type)) {
+                    const outNode = comp.outputs[0];
+                    const circle = createSVGElement('circle', { cx: outNode.x - 5, cy: outNode.y, r: 5, fill: '#374151' });
+                    circle.classList.add('gate-symbol');
+                    g.appendChild(circle);
+                }
+                return g;
+            }
+
+            function updateSimulation() {
+                for (let i = 0; i < 15; i++) {
+                    Object.values(components).forEach(comp => comp.inputs.forEach(input => input.value = 0));
+                    wires.forEach(wire => {
+                        const startComp = components[wire.startComponentId];
+                        const endComp = components[wire.endComponentId];
+                        if (!startComp || !endComp) return;
+                        const startNode = startComp.outputs.find(o => o.id === wire.startNodeId);
+                        const endNode = endComp.inputs.find(i => i.id === wire.endNodeId);
+                        if (startNode && endNode) endNode.value = startNode.value;
+                    });
+                    Object.values(components).forEach(comp => {
+                        if (comp.type === 'OUTPUT' || comp.type === 'TEXT') return;
+                        const inputValues = comp.inputs.map(i => i.value);
+                        const outputValues = logic[comp.type] ? logic[comp.type](comp.type === 'INPUT' ? comp : inputValues) : {};
+                        comp.outputs.forEach(o => {
+                            o.value = outputValues[o.id] !== undefined ? outputValues[o.id] : 0;
+                        });
+                    });
+                }
+                draw();
+            }
+
+            function getSVGPoint(e) {
+                const pt = svg.createSVGPoint();
+                const touch = e.touches && e.touches.length > 0 ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : null);
+                const clientX = touch ? touch.clientX : e.clientX;
+                const clientY = touch ? touch.clientY : e.clientY;
+
+                if (clientX === undefined || clientY === undefined) return {x:0, y:0};
+
+                pt.x = clientX;
+                pt.y = clientY;
+                return pt.matrixTransform(svg.getScreenCTM().inverse());
+            }
+            
+            function createComponent(type, x, y) {
+                const id = `comp_${nextId++}`;
+                const def = componentDefs[type];
+                components[id] = {
+                    id, ...def, x, y, state: 0,
+                    inputs: def.inputs ? def.inputs.map(i => ({ ...i, value: 0, connected: false })) : [],
+                    outputs: def.outputs ? def.outputs.map(o => ({ ...o, value: 0 })) : [],
+                };
+                if(type === 'TEXT') components[id].text = 'テキスト';
+                return components[id];
+            }
+
+            function addWire(startComp, startNodeId, endComp, endNodeId) {
+                const endNode = endComp.inputs.find(i => i.id === endNodeId);
+                if (endNode && !endNode.connected) {
+                    wires.push({ id: `wire_${nextId++}`, startComponentId: startComp.id, startNodeId, endComponentId: endComp.id, endNodeId });
+                    endNode.connected = true;
+                }
+            }
+
+            function deleteComponentsByIds(ids) {
+                const idSet = new Set(ids);
+                wires = wires.filter(wire => !idSet.has(wire.startComponentId) && !idSet.has(wire.endComponentId));
+                ids.forEach(id => { delete components[id]; selectedComponentIds.delete(id); });
+                updateSimulation();
+            }
+
+            function deleteComponent(id) { deleteComponentsByIds([id]); }
+            function deleteSelectedComponents() { deleteComponentsByIds([...selectedComponentIds]); }
+
+            function deleteWire(id) {
+                const wireIndex = wires.findIndex(w => w.id === id);
+                if (wireIndex > -1) {
+                    const wire = wires[wireIndex];
+                    const endComp = components[wire.endComponentId];
+                    if (endComp) {
+                        const endNode = endComp.inputs.find(i => i.id === wire.endNodeId);
+                        if (endNode) endNode.connected = false;
+                    }
+                    wires.splice(wireIndex, 1);
+                    updateSimulation();
+                }
+            }
+            
+            function insertJunctionOnWire(wireId, point) {
+                const originalWireIndex = wires.findIndex(w => w.id === wireId);
+                if (originalWireIndex === -1) return;
+
+                const originalWire = wires[originalWireIndex];
+
+                const junctionX = Math.round((point.x - 10) / snapGridSize) * snapGridSize;
+                const junctionY = Math.round((point.y - 10) / snapGridSize) * snapGridSize;
+                const junction = createComponent('JUNCTION', junctionX, junctionY);
+                
+                const startComp = components[originalWire.startComponentId];
+                const endComp = components[originalWire.endComponentId];
+
+                const endNode = endComp.inputs.find(i => i.id === originalWire.endNodeId);
+                if (endNode) endNode.connected = false;
+                wires.splice(originalWireIndex, 1);
+
+                addWire(startComp, originalWire.startNodeId, junction, 'in');
+                addWire(junction, 'out', endComp, originalWire.endNodeId);
+                
+                updateSimulation();
+            }
+
+            function toggleInput(id) {
+                const comp = components[id];
+                if (comp && comp.type === 'INPUT') {
+                    comp.state = comp.state === 0 ? 1 : 0;
+                    comp.outputs[0].value = comp.state;
+                    updateSimulation();
+                }
+            }
+
+            function editText(id) {
+                currentEditingTextId = id;
+                const comp = components[id];
+                if (!comp || comp.type !== 'TEXT') return;
+                textModalInput.value = comp.text;
+                textModal.classList.remove('hidden');
+                textModalInput.focus();
+                textModalInput.select();
+            }
+
+            // --- Unified Pointer Event Handlers ---
+            function onPointerDown(e) {
+                if (e.type === 'touchstart') e.preventDefault();
+                const svgP = getSVGPoint(e);
+                const targetNode = e.target.closest('.node');
+                const targetComponent = e.target.closest('.component');
+                const targetWire = e.target.closest('.wire');
+                state.isClick = true;
+
+                clearTimeout(state.longPressTimer);
+                if (targetComponent || targetWire) {
+                    state.longPressTimer = setTimeout(() => {
+                        if (state.action !== 'dragging' && state.isClick) {
+                            if (targetWire) deleteWire(targetWire.dataset.id);
+                            else if (targetComponent) deleteComponent(targetComponent.dataset.id);
+                            state.action = 'none';
+                        }
+                    }, 750);
+                }
+
+                if (targetNode) {
+                    state.action = 'wiring';
+                    svg.classList.add('wiring');
+                    const { componentId, nodeId, nodeType } = targetNode.dataset;
+                    state.wiring.startNodeInfo = { componentId, nodeId, nodeType };
+                    const component = components[componentId];
+                    const node = (nodeType === 'input' ? component.inputs : component.outputs).find(n => n.id === nodeId);
+                    const x1 = component.x + node.x, y1 = component.y + node.y;
+                    state.wiring.tempLine = createSVGElement('line', { x1, y1, x2: svgP.x, y2: svgP.y, stroke: '#f59e0b', 'stroke-width': '2.5', 'stroke-dasharray': '5, 5', 'pointer-events': 'none' });
+                } else if (targetComponent) {
+                    state.action = 'dragging';
+                    const componentId = targetComponent.dataset.id;
+                    if (!e.ctrlKey && !e.metaKey && !selectedComponentIds.has(componentId)) {
+                        selectedComponentIds.clear();
+                    }
+                    if (!(e.ctrlKey || e.metaKey) || !selectedComponentIds.has(componentId)) {
+                         selectedComponentIds.add(componentId);
+                    }
+                    state.dragStart = svgP;
+                    state.initialPositions.clear();
+                    selectedComponentIds.forEach(id => {
+                        const comp = components[id];
+                        state.initialPositions.set(id, { x: comp.x, y: comp.y });
+                    });
+                } else {
+                    state.action = 'selecting';
+                    selectedComponentIds.clear();
+                    state.dragStart = svgP;
+                    state.selectionBox = createSVGElement('rect', { id: 'selection-box', x: svgP.x, y: svgP.y, width: 0, height: 0 });
+                }
+                draw();
+            }
+
+            function onPointerMove(e) {
+                if (state.action === 'none') return;
+                if (e.type === 'touchmove') e.preventDefault();
+                const svgP = getSVGPoint(e);
+                const dx = Math.abs(svgP.x - state.dragStart.x);
+                const dy = Math.abs(svgP.y - state.dragStart.y);
+                if (dx > 5 || dy > 5) {
+                    state.isClick = false;
+                    clearTimeout(state.longPressTimer);
+                }
+                
+                if (state.action === 'dragging') {
+                    const deltaX = svgP.x - state.dragStart.x;
+                    const deltaY = svgP.y - state.dragStart.y;
+                    selectedComponentIds.forEach(id => {
+                        const comp = components[id];
+                        const initial = state.initialPositions.get(id);
+                        comp.x = Math.round((initial.x + deltaX) / snapGridSize) * snapGridSize;
+                        comp.y = Math.round((initial.y + deltaY) / snapGridSize) * snapGridSize;
+                    });
+                } else if (state.action === 'selecting') {
+                    const x = Math.min(state.dragStart.x, svgP.x);
+                    const y = Math.min(state.dragStart.y, svgP.y);
+                    const width = Math.abs(state.dragStart.x - svgP.x);
+                    const height = Math.abs(state.dragStart.y - svgP.y);
+                    state.selectionBox.setAttribute('x', x);
+                    state.selectionBox.setAttribute('y', y);
+                    state.selectionBox.setAttribute('width', width);
+                    state.selectionBox.setAttribute('height', height);
+                } else if (state.action === 'wiring') {
+                    state.wiring.tempLine.setAttribute('x2', svgP.x);
+                    state.wiring.tempLine.setAttribute('y2', svgP.y);
+                }
+                draw();
+            }
+            
+            function onPointerUp(e) {
+                clearTimeout(state.longPressTimer);
+                
+                // --- Manual Double-click/tap detection ---
+                if (state.isClick) {
+                    const now = new Date().getTime();
+                    const targetWireEl = e.target.closest('.wire');
+                    if (targetWireEl) {
+                        const wireId = targetWireEl.dataset.id;
+                        if ((now - lastClickInfo.time < 400) && lastClickInfo.targetId === wireId) {
+                            insertJunctionOnWire(wireId, getSVGPoint(e));
+                            lastClickInfo = { time: 0, targetId: null }; // Reset after action
+                            state.action = 'none';
+                            return; // Exit early to prevent other actions
+                        }
+                        lastClickInfo = { time: now, targetId: wireId };
+                    } else {
+                        lastClickInfo = { time: 0, targetId: null }; // Reset if not clicking on a wire
+                    }
+                }
+
+
+                if (state.action === 'none') return;
+                 if (e.type.includes('touch')) e.preventDefault();
+
+                const targetComponent = e.target.closest('.component');
+                const targetNode = e.target.closest('.node');
+                
+                if (state.action === 'dragging' && state.isClick && targetComponent) {
+                    const componentId = targetComponent.dataset.id;
+                    const comp = components[componentId];
+                    if (comp) {
+                        if (comp.type === 'TEXT') {
+                            editText(comp.id);
+                        } else if (comp.type === 'INPUT' && (e.target.tagName.toLowerCase() === 'rect' || e.target.tagName.toLowerCase() === 'text')) {
+                            toggleInput(comp.id);
+                        }
+                    }
+                } else if (state.action === 'selecting') {
+                    if (state.selectionBox) {
+                        const box = state.selectionBox.getBBox();
+                        selectedComponentIds.clear();
+                        Object.values(components).forEach(comp => {
+                            if (box.x < comp.x + comp.width && box.x + box.width > comp.x &&
+                                box.y < comp.y + comp.height && box.y + box.height > comp.y) {
+                                selectedComponentIds.add(comp.id);
+                            }
+                        });
+                    }
+                } else if (state.action === 'wiring') {
+                    if (targetNode) {
+                        const start = state.wiring.startNodeInfo;
+                        const end = targetNode.dataset;
+                        if (start.componentId !== end.componentId && start.nodeType !== end.nodeType) {
+                            const output = start.nodeType === 'output' ? start : end;
+                            const input = start.nodeType === 'input' ? start : end;
+                            addWire(components[output.componentId], output.nodeId, components[input.componentId], input.nodeId);
+                            updateSimulation();
+                        }
+                    }
+                }
+                
+                state.action = 'none';
+                state.selectionBox = null;
+                state.wiring.tempLine = null;
+                svg.classList.remove('wiring');
+                draw();
+            }
+
+            // --- Mouse & Touch Listeners on SVG ---
+            svg.addEventListener('mousedown', onPointerDown);
+            svg.addEventListener('mousemove', onPointerMove);
+            svg.addEventListener('mouseup', onPointerUp);
+            svg.addEventListener('mouseleave', onPointerUp);
+            svg.addEventListener('touchstart', onPointerDown, { passive: false });
+            svg.addEventListener('touchmove', onPointerMove, { passive: false });
+            svg.addEventListener('touchend', onPointerUp);
+            svg.addEventListener('touchcancel', onPointerUp);
+            
+            // --- Palette Drag & Drop (PC) ---
+            palette.addEventListener('dragstart', (e) => {
+                if (e.target.classList.contains('component-palette-item')) {
+                    e.dataTransfer.setData('text/plain', e.target.dataset.type);
+                    e.dataTransfer.effectAllowed = 'copy';
+                }
+            });
+            svg.addEventListener('dragover', (e) => e.preventDefault());
+            svg.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const type = e.dataTransfer.getData('text/plain');
+                if (componentDefs[type]) {
+                    const svgP = getSVGPoint(e);
+                    const x = Math.round(svgP.x / snapGridSize) * snapGridSize;
+                    const y = Math.round(svgP.y / snapGridSize) * snapGridSize;
+                    createComponent(type, x, y);
+                    updateSimulation();
+                }
+            });
+
+            // --- Palette Drag & Drop (Touch) ---
+            palette.addEventListener('touchstart', (e) => {
+                const item = e.target.closest('.component-palette-item');
+                if (!item) return;
+                e.preventDefault();
+                ghostDataType = item.dataset.type;
+                ghostElement = document.createElement('div');
+                ghostElement.textContent = item.textContent;
+                ghostElement.className = 'ghost-component';
+                document.body.appendChild(ghostElement);
+                const touch = e.touches[0];
+                ghostElement.style.left = `${touch.clientX - 40}px`;
+                ghostElement.style.top = `${touch.clientY - 20}px`;
+            }, { passive: false });
+
+            document.body.addEventListener('touchmove', (e) => {
+                if (!ghostElement) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                ghostElement.style.left = `${touch.clientX - 40}px`;
+                ghostElement.style.top = `${touch.clientY - 20}px`;
+            }, { passive: false });
+
+            document.body.addEventListener('touchend', (e) => {
+                if (!ghostElement) return;
+                const touch = e.changedTouches[0];
+                const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (dropTarget && dropTarget.id === 'circuit-canvas') {
+                    if (componentDefs[ghostDataType]) {
+                        const svgP = getSVGPoint(e);
+                        const x = Math.round(svgP.x / snapGridSize) * snapGridSize;
+                        const y = Math.round(svgP.y / snapGridSize) * snapGridSize;
+                        createComponent(ghostDataType, x, y);
+                        updateSimulation();
+                    }
+                }
+                document.body.removeChild(ghostElement);
+                ghostElement = null;
+                ghostDataType = null;
+            });
+
+            // --- Other listeners ---
+            svg.addEventListener('contextmenu', e => e.preventDefault());
+
+            clearButton.addEventListener('click', () => {
+                components = {}; wires = []; selectedComponentIds.clear(); updateSimulation();
+            });
+            
+            saveButton.addEventListener('click', () => {
+                const data = { components, wires, nextId };
+                const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'circuit.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+            loadButton.addEventListener('click', () => { loadInput.click(); });
+
+            loadInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.components && data.wires && data.nextId !== undefined) {
+                            components = data.components;
+                            wires = data.wires;
+                            nextId = data.nextId;
+                            selectedComponentIds.clear();
+                            updateSimulation();
+                        } else { alert('無効なファイル形式です。'); }
+                    } catch (err) { alert('ファイルの読み込みに失敗しました。'); }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    e.preventDefault();
+                    deleteSelectedComponents();
+                }
+            });
+
+            textModalOk.addEventListener('click', () => {
+                if (currentEditingTextId) {
+                    const comp = components[currentEditingTextId];
+                    comp.text = textModalInput.value;
+                    textModal.classList.add('hidden');
+                    currentEditingTextId = null;
+                    draw();
+                }
+            });
+            textModalCancel.addEventListener('click', () => {
+                textModal.classList.add('hidden');
+                currentEditingTextId = null;
+            });
+            textModalInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') textModalOk.click();
+                if (e.key === 'Escape') textModalCancel.click();
+            });
+
+            updateSimulation();
+        });
+    </script>
+</body>
+</html>

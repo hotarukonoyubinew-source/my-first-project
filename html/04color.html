@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>RGBカラー作成ツール</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      width: 550px;
+      margin: 20px auto;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    td, th {
+      border: 1px solid #aaa;
+      padding: 5px;
+      text-align: center;
+    }
+    .slider {
+      width: 150px;
+    }
+    .color-display {
+      height: 40px;
+      margin-top: 10px;
+    }
+    .color-code {
+      font-size: 1.5em;
+      font-weight: bold;
+      padding: 5px 10px;
+      width: 120px;
+      text-align: center;
+    }
+    .mini-box {
+      width: 50px;
+      height: 30px;
+      display: inline-block;
+      margin-left: 10px;
+      border: 1px solid #888;
+    }
+  </style>
+</head>
+<body>
+
+<table>
+  <tr>
+    <th>RGB<br>（光の3原色）</th>
+    <th>数値<br>（0～255）</th>
+    <th>操作バー</th>
+    <th>色表示</th>
+  </tr>
+  <tr>
+    <td style="color:red;">R(赤)</td>
+    <td><input type="number" id="rVal" value="58" min="0" max="255" oninput="updateFromInput('r')"></td>
+    <td><input type="range" id="rSlider" class="slider" min="0" max="255" value="58" oninput="updateColor()"></td>
+    <td><div id="rBox" class="mini-box" style="background-color: rgb(58, 0, 0);"></div></td>
+  </tr>
+  <tr>
+    <td style="color:green;">G(緑)</td>
+    <td><input type="number" id="gVal" value="207" min="0" max="255" oninput="updateFromInput('g')"></td>
+    <td><input type="range" id="gSlider" class="slider" min="0" max="255" value="207" oninput="updateColor()"></td>
+    <td><div id="gBox" class="mini-box" style="background-color: rgb(0, 207, 0);"></div></td>
+  </tr>
+  <tr>
+    <td style="color:blue;">B(青)</td>
+    <td><input type="number" id="bVal" value="87" min="0" max="255" oninput="updateFromInput('b')"></td>
+    <td><input type="range" id="bSlider" class="slider" min="0" max="255" value="87" oninput="updateColor()"></td>
+    <td><div id="bBox" class="mini-box" style="background-color: rgb(0, 0, 87);"></div></td>
+  </tr>
+</table>
+
+<h3>作成した色</h3>
+<div id="colorDisplay" class="color-display" style="background-color: rgb(58, 207, 87);"></div>
+
+<h3>カラーコード</h3>
+<input type="text" id="hexCode" class="color-code" value="#3ACF57" readonly>
+
+<script>
+  function updateColor() {
+    const r = parseInt(document.getElementById("rSlider").value);
+    const g = parseInt(document.getElementById("gSlider").value);
+    const b = parseInt(document.getElementById("bSlider").value);
+
+    document.getElementById("rVal").value = r;
+    document.getElementById("gVal").value = g;
+    document.getElementById("bVal").value = b;
+
+    const rgb = `rgb(${r}, ${g}, ${b})`;
+    document.getElementById("colorDisplay").style.backgroundColor = rgb;
+
+    const hex = "#" + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+    document.getElementById("hexCode").value = hex;
+
+    document.getElementById("rBox").style.backgroundColor = `rgb(${r}, 0, 0)`;
+    document.getElementById("gBox").style.backgroundColor = `rgb(0, ${g}, 0)`;
+    document.getElementById("bBox").style.backgroundColor = `rgb(0, 0, ${b})`;
+  }
+
+  function updateFromInput(color) {
+    const val = document.getElementById(color + "Val").value;
+    document.getElementById(color + "Slider").value = val;
+    updateColor();
+  }
+
+  updateColor();
+</script>
+
+</body>
+</html>

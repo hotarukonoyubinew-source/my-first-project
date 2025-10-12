@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画像デジタル化学習ツール (高機能版)</title>
+    <!-- Tailwind CSSとInterフォントを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.jsを読み込み -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* カスタムスタイル */
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb; /* gray-200 */
+            border-radius: 9999px;
+            outline: none;
+            opacity: 0.8;
+            transition: opacity .2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6; /* blue-500 */
+            cursor: pointer;
+            border-radius: 9999px;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6; /* blue-500 */
+            cursor: pointer;
+            border-radius: 9999px;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        /* 初期状態でCanvasに表示するテキストのスタイル */
+        .canvas-placeholder::before {
+            content: 'ここに画像が表示されます';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #6b7280; /* gray-500 */
+            font-size: 1rem;
+            text-align: center;
+        }
+        .hidden-control {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto py-5 px-4 sm:px-6 lg:px-8 text-center">
+            <h1 class="text-3xl font-bold text-gray-900 tracking-tight">画像デジタル化 学習ツール</h1>
+            <p class="mt-2 text-md text-gray-600">画像をアップロードして、デジタル画像の仕組みをインタラクティブに体験しましょう。</p>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <!-- ドラッグ＆ドロップエリア -->
+            <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition-colors duration-300">
+                <label for="imageLoader" class="cursor-pointer">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span class="mt-2 block text-lg font-semibold text-blue-600">画像を選択</span>
+                    <span class="mt-1 block text-sm text-gray-500">(クリックまたはドラッグ＆ドロップ)</span>
+                </label>
+                <input type="file" id="imageLoader" name="imageLoader" accept="image/*" class="hidden">
+            </div>
+        </div>
+
+        <!-- メインコンテンツグリッド (上段) -->
+        <div class="grid lg:grid-cols-5 gap-8 mb-8">
+            <!-- 左カラム: 操作パネル -->
+            <section class="lg:col-span-2 bg-white rounded-xl shadow-lg p-6 h-fit">
+                <div class="flex justify-between items-center border-b pb-3 mb-5">
+                    <h2 class="text-xl font-bold text-gray-800">画像調整パネル</h2>
+                    <button id="resetBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg text-sm transition disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
+                        リセット
+                    </button>
+                </div>
+                <div class="space-y-6">
+                    <!-- 解像度 -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="resolution" class="font-semibold">解像度</label>
+                            <span id="resolutionValue" class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">100%</span>
+                        </div>
+                        <input type="range" id="resolution" name="resolution" min="10" max="100" value="100">
+                        <p class="text-xs text-gray-500 mt-1">画像を構成する点の細かさ（ピクセル数）を調整します。<br><span id="resolutionPixelValue" class="font-semibold"></span></p>
+                    </div>
+                    <!-- ビット深度 -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="bitDepth" class="font-semibold">ビット深度 (1chあたり)</label>
+                            <span id="bitDepthValue" class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">8 bit</span>
+                        </div>
+                        <input type="range" id="bitDepth" name="bitDepth" min="1" max="8" value="8">
+                        <p class="text-xs text-gray-500 mt-1">1ピクセルの各色成分が持つことのできる情報量（段階）を調整します。</p>
+                    </div>
+                     <!-- 明るさ -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="brightness" class="font-semibold">明るさ</label>
+                            <span id="brightnessValue" class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">0</span>
+                        </div>
+                        <input type="range" id="brightness" name="brightness" min="-100" max="100" value="0">
+                        <p class="text-xs text-gray-500 mt-1">画像全体の明るさを調整します。</p>
+                    </div>
+                    <!-- コントラスト -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="contrast" class="font-semibold">コントラスト</label>
+                            <span id="contrastValue" class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">0</span>
+                        </div>
+                        <input type="range" id="contrast" name="contrast" min="-100" max="100" value="0">
+                         <p class="text-xs text-gray-500 mt-1">明るい部分と暗い部分の差を調整します。</p>
+                    </div>
+                     <!-- ぼかし -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="blur" class="font-semibold">ぼかし</label>
+                            <span id="blurValue" class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">0</span>
+                        </div>
+                        <input type="range" id="blur" name="blur" min="0" max="10" value="0">
+                        <p class="text-xs text-gray-500 mt-1">画像を滑らかにします。強くするとピントが合っていないようになります。</p>
+                    </div>
+                    <!-- その他のフィルター -->
+                    <div class="pt-4 border-t space-y-4">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="grayscale" name="grayscale" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                            <label for="grayscale" class="ml-2 block text-sm font-semibold text-gray-900">グレースケール</label>
+                        </div>
+                        <!-- ▼▼▼ 追加機能: ネガ反転 ▼▼▼ -->
+                        <div class="flex items-center">
+                            <input type="checkbox" id="invert" name="invert" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                            <label for="invert" class="ml-2 block text-sm font-semibold text-gray-900">ネガ反転<p class="text-xs text-gray-500 mt-1">写真や画像の色を反対にすること。青い部分は黄色に (青の反対色)</p></label>
+                        </div>
+                        <!-- ▲▲▲ 追加機能ここまで ▲▲▲ -->
+                        <div>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="binarization" name="binarization" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                <label for="binarization" class="ml-2 block text-sm font-semibold text-gray-900">2値化 (白黒)</label>
+                            </div>
+                            <div id="binarization-group" class="slider-group mt-2 pl-6 hidden-control">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label for="binarizationThreshold" class="text-sm">白黒の境界 (閾値)</label>
+                                    <span id="binarizationThresholdValue" class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">128</span>
+                                </div>
+                                <input type="range" id="binarizationThreshold" name="binarizationThreshold" min="0" max="255" value="128">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 右カラム: 画像表示と情報 -->
+            <div class="lg:col-span-3">
+                <!-- 画像比較 & ダウンロード -->
+                <section class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                    <div class="flex flex-wrap justify-between items-center border-b pb-3 mb-5 gap-2">
+                         <h2 class="text-xl font-bold text-gray-800">プレビュー</h2>
+                         <button id="downloadBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>
+                             調整後画像をダウンロード
+                         </button>
+                    </div>
+                    <div id="imageInfo" class="text-center text-sm text-gray-500 mb-4 bg-gray-100 p-2 rounded-md"></div>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <figure class="text-center">
+                            <canvas id="originalCanvas" class="w-full h-auto border border-gray-200 bg-gray-50 rounded-lg shadow-inner relative canvas-placeholder"></canvas>
+                            <figcaption class="mt-2 text-sm text-gray-600 font-semibold">オリジナル画像</figcaption>
+                        </figure>
+                        <figure class="text-center">
+                            <canvas id="adjustedCanvas" class="w-full h-auto border border-gray-200 bg-gray-50 rounded-lg shadow-inner cursor-crosshair relative canvas-placeholder"></canvas>
+                            <figcaption class="mt-2 text-sm text-gray-600 font-semibold">調整後の画像</figcaption>
+                        </figure>
+                    </div>
+                </section>
+                
+                <!-- ピクセル情報 -->
+                <section class="bg-white rounded-xl shadow-lg p-6">
+                      <h2 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">ピクセル情報</h2>
+                      <p class="text-sm text-gray-600 mb-4">調整後の画像の上にマウスを移動すると、その点のピクセル情報が表示されます。</p>
+                      <div id="pixel-info-display" class="flex items-center gap-4 bg-gray-100 p-4 rounded-lg min-h-[80px]">
+                          <div id="color-preview" class="w-16 h-16 rounded-md border-2 border-white shadow-inner flex-shrink-0" style="background-color: #f3f4f6;"></div>
+                          <div class="font-mono text-sm">
+                              <div class="text-gray-500">10進数: <strong id="rgb-dec-value" class="text-gray-800 tracking-wider">R:-, G:-, B:-</strong></div>
+                              <div class="text-gray-500 mt-1">16進数: <strong id="rgb-hex-value" class="text-gray-800 tracking-wider">#------</strong></div>
+                          </div>
+                      </div>
+                </section>
+            </div>
+        </div>
+        
+        <!-- 下段グリッド: ヒストグラムとチャンネル分解 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+             <!-- 輝度ヒストグラム -->
+            <section class="bg-white rounded-xl shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">輝度ヒストグラム</h2>
+                <p class="text-sm text-gray-600 mb-4">画像の明るさの分布図です。左が暗いピクセル、右が明るいピクセルを示します。</p>
+                <canvas id="histogramChart"></canvas>
+            </section>
+
+            <!-- RGBチャンネル分解 -->
+            <section class="bg-white rounded-xl shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">RGBチャンネル分解</h2>
+                <p class="text-sm text-gray-600 mb-4">カラー画像は、光の三原色であるR(赤)・G(緑)・B(青)の画像の組み合わせでできています。</p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <figure class="text-center">
+                        <canvas id="rCanvas" class="w-full h-auto border border-gray-200 bg-black rounded-lg shadow-inner relative canvas-placeholder"></canvas>
+                        <figcaption class="mt-2 text-sm text-red-600 font-semibold">R (赤) チャンネル</figcaption>
+                    </figure>
+                    <figure class="text-center">
+                        <canvas id="gCanvas" class="w-full h-auto border border-gray-200 bg-black rounded-lg shadow-inner relative canvas-placeholder"></canvas>
+                        <figcaption class="mt-2 text-sm text-green-600 font-semibold">G (緑) チャンネル</figcaption>
+                    </figure>
+                    <figure class="text-center">
+                        <canvas id="bCanvas" class="w-full h-auto border border-gray-200 bg-black rounded-lg shadow-inner relative canvas-placeholder"></canvas>
+                        <figcaption class="mt-2 text-sm text-blue-600 font-semibold">B (青) チャンネル</figcaption>
+                    </figure>
+                </div>
+            </section>
+        </div>
+
+        <!-- ポスタリゼーション機能 -->
+        <section class="bg-white rounded-xl shadow-lg p-6">
+            <h2 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">追加機能: ポスタリゼーション</h2>
+            <p class="text-sm text-gray-600 mb-4">オリジナル画像の色数を減らして、イラストのような効果を生み出します。</p>
+            <div class="grid md:grid-cols-2 gap-8 items-start">
+                <!-- ポスタリゼーション操作パネル -->
+                <div class="space-y-4">
+                     <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="posterizeLevel" class="font-semibold">色の段階 (レベル)</label>
+                            <span id="posterizeLevelValue" class="text-sm font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded">4</span>
+                        </div>
+                        <input type="range" id="posterizeLevel" name="posterizeLevel" min="2" max="32" value="4">
+                        <p class="text-xs text-gray-500 mt-1">各色成分(RGB)を何段階で表現するか指定します。</p>
+                    </div>
+                    <button id="posterizeBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>
+                        ポスタリゼーション実行
+                    </button>
+                </div>
+                <!-- ポスタリゼーション結果表示 -->
+                <figure class="text-center">
+                    <canvas id="posterizedCanvas" class="w-full h-auto border border-gray-200 bg-gray-50 rounded-lg shadow-inner relative canvas-placeholder"></canvas>
+                    <figcaption class="mt-2 text-sm text-gray-600 font-semibold">ポスタリゼーション後の画像</figcaption>
+                </figure>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM要素の取得 ---
+            const imageLoader = document.getElementById('imageLoader');
+            const dropZone = document.getElementById('drop-zone');
+            const resolutionSlider = document.getElementById('resolution');
+            const blurSlider = document.getElementById('blur');
+            const brightnessSlider = document.getElementById('brightness');
+            const contrastSlider = document.getElementById('contrast');
+            const bitDepthSlider = document.getElementById('bitDepth'); 
+            const grayscaleCheckbox = document.getElementById('grayscale');
+            const binarizationCheckbox = document.getElementById('binarization');
+            const binarizationThresholdSlider = document.getElementById('binarizationThreshold');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const invertCheckbox = document.getElementById('invert'); // ネガ反転チェックボックス
+
+            // --- ポスタリゼーション機能のDOM要素 ---
+            const posterizeLevelSlider = document.getElementById('posterizeLevel');
+            const posterizeLevelValueSpan = document.getElementById('posterizeLevelValue');
+            const posterizeBtn = document.getElementById('posterizeBtn');
+            const posterizedCanvas = document.getElementById('posterizedCanvas');
+            const posterizedCtx = posterizedCanvas.getContext('2d', { willReadFrequently: true });
+
+            const resolutionValueSpan = document.getElementById('resolutionValue');
+            const resolutionPixelValueSpan = document.getElementById('resolutionPixelValue');
+            const blurValueSpan = document.getElementById('blurValue');
+            const brightnessValueSpan = document.getElementById('brightnessValue');
+            const contrastValueSpan = document.getElementById('contrastValue');
+            const bitDepthValueSpan = document.getElementById('bitDepthValue');
+            const binarizationGroup = document.getElementById('binarization-group');
+            const binarizationThresholdValueSpan = document.getElementById('binarizationThresholdValue');
+
+            const originalCanvas = document.getElementById('originalCanvas');
+            const adjustedCanvas = document.getElementById('adjustedCanvas');
+            const rCanvas = document.getElementById('rCanvas');
+            const gCanvas = document.getElementById('gCanvas');
+            const bCanvas = document.getElementById('bCanvas');
+            const adjustableCanvases = [adjustedCanvas, rCanvas, gCanvas, bCanvas, posterizedCanvas];
+
+            const imageInfo = document.getElementById('imageInfo');
+            const colorPreview = document.getElementById('color-preview');
+            const rgbDecValue = document.getElementById('rgb-dec-value');
+            const rgbHexValue = document.getElementById('rgb-hex-value');
+            
+            const histogramCtx = document.getElementById('histogramChart').getContext('2d');
+
+            const originalCtx = originalCanvas.getContext('2d', { willReadFrequently: true });
+            const adjustedCtx = adjustedCanvas.getContext('2d', { willReadFrequently: true });
+            const rCtx = rCanvas.getContext('2d');
+            const gCtx = gCanvas.getContext('2d');
+            const bCtx = bCanvas.getContext('2d');
+
+            let originalImage = null;
+            let histogramChart = null;
+            let isProcessing = false;
+
+            // --- イベントリスナー ---
+            const controls = [resolutionSlider, blurSlider, brightnessSlider, contrastSlider, bitDepthSlider, grayscaleCheckbox, binarizationCheckbox, binarizationThresholdSlider, invertCheckbox];
+            controls.forEach(el => el.addEventListener('input', () => requestApplyFilters()));
+            
+            resetBtn.addEventListener('click', () => {
+                resetControls();
+                requestApplyFilters();
+                clearPosterizeCanvas();
+            });
+            
+            binarizationCheckbox.addEventListener('change', () => {
+                binarizationGroup.style.display = binarizationCheckbox.checked ? 'block' : 'none';
+                if(binarizationCheckbox.checked) {
+                    grayscaleCheckbox.checked = true;
+                    grayscaleCheckbox.disabled = true;
+                    bitDepthSlider.value = 1;
+                    bitDepthSlider.disabled = true;
+                } else {
+                    grayscaleCheckbox.disabled = false;
+                    bitDepthSlider.disabled = false;
+                }
+                requestApplyFilters();
+            });
+            
+            imageLoader.addEventListener('change', (e) => loadImageFromFile(e.target.files[0]));
+            setupDragAndDrop();
+            
+            adjustedCanvas.addEventListener('mousemove', showPixelInfo);
+            adjustedCanvas.addEventListener('mouseleave', clearPixelInfo);
+            downloadBtn.addEventListener('click', downloadImage);
+            
+            // --- ポスタリゼーション機能のイベントリスナー ---
+            posterizeLevelSlider.addEventListener('input', () => {
+                posterizeLevelValueSpan.textContent = posterizeLevelSlider.value;
+            });
+            posterizeBtn.addEventListener('click', applyPosterization);
+
+            // --- 初期化処理 ---
+            loadSampleImage();
+
+            // --- 関数定義 ---
+            
+            function setupDragAndDrop() {
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.add('border-blue-500', 'bg-blue-50');
+                });
+                dropZone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+                });
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+                    const file = e.dataTransfer.files[0];
+                    loadImageFromFile(file);
+                });
+            }
+
+            function loadSampleImage() {
+                const sampleImageUrl = 'https://placehold.co/600x400/3b82f6/ffffff?text=Sample+Image';
+                originalImage = new Image();
+                originalImage.crossOrigin = "Anonymous";
+                originalImage.onload = () => handleImageLoad();
+                originalImage.onerror = () => {
+                    console.error('サンプル画像の読み込みに失敗しました。');
+                }
+                originalImage.src = sampleImageUrl;
+            }
+
+            function loadImageFromFile(file) {
+                if (!file || !file.type.startsWith('image/')) {
+                    console.error('画像ファイルを選択してください。');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    originalImage = new Image();
+                    originalImage.onload = () => handleImageLoad();
+                    originalImage.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+            
+            function handleImageLoad() {
+                originalCanvas.width = originalImage.width;
+                originalCanvas.height = originalImage.height;
+                originalCtx.drawImage(originalImage, 0, 0);
+                originalCanvas.classList.remove('canvas-placeholder');
+                
+                resetControls();
+                requestApplyFilters();
+                clearPosterizeCanvas();
+                
+                downloadBtn.disabled = false;
+                resetBtn.disabled = false;
+                posterizeBtn.disabled = false;
+            }
+
+            function resetControls() {
+                resolutionSlider.value = 100;
+                blurSlider.value = 0;
+                brightnessSlider.value = 0;
+                contrastSlider.value = 0;
+                bitDepthSlider.value = 8;
+                bitDepthSlider.disabled = false;
+                grayscaleCheckbox.checked = false;
+                grayscaleCheckbox.disabled = false;
+                invertCheckbox.checked = false; // ネガ反転をリセット
+                binarizationCheckbox.checked = false;
+                binarizationThresholdSlider.value = 128;
+                binarizationGroup.style.display = 'none';
+
+                posterizeLevelSlider.value = 4;
+                posterizeLevelValueSpan.textContent = '4';
+            }
+            
+            function requestApplyFilters() {
+                if (!isProcessing) {
+                    isProcessing = true;
+                    requestAnimationFrame(() => {
+                        applyFilters();
+                        isProcessing = false;
+                    });
+                }
+            }
+            
+            function applyFilters() {
+                if (!originalImage) return;
+
+                const resolution = parseInt(resolutionSlider.value) / 100;
+                const blurRadius = parseInt(blurSlider.value);
+                const brightness = parseInt(brightnessSlider.value);
+                const contrast = parseInt(contrastSlider.value);
+                const bits = parseInt(bitDepthSlider.value);
+                const useGrayscale = grayscaleCheckbox.checked;
+                const useInvert = invertCheckbox.checked; // ネガ反転の値を取得
+                const useBinarization = binarizationCheckbox.checked;
+                const binarizationThreshold = parseInt(binarizationThresholdSlider.value);
+                
+                const levels = Math.pow(2, bits);
+                const newWidth = Math.max(1, Math.round(originalImage.width * resolution));
+                const newHeight = Math.max(1, Math.round(originalImage.height * resolution));
+
+                updateUIValues(resolution, newWidth, newHeight, blurRadius, brightness, contrast, levels, bits, binarizationThreshold);
+
+                [adjustedCanvas, rCanvas, gCanvas, bCanvas].forEach(canvas => {
+                    if (canvas.width !== newWidth || canvas.height !== newHeight) {
+                        canvas.width = newWidth;
+                        canvas.height = newHeight;
+                    }
+                    canvas.classList.remove('canvas-placeholder');
+                });
+                
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = newWidth;
+                tempCanvas.height = newHeight;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(originalImage, 0, 0, newWidth, newHeight);
+                let imageData = tempCtx.getImageData(0, 0, newWidth, newHeight);
+
+                if (blurRadius > 0) {
+                    imageData = applyBoxBlur(imageData, blurRadius);
+                }
+
+                processPixelData(imageData.data, brightness, contrast, levels, useGrayscale, useBinarization, binarizationThreshold, useInvert);
+                
+                adjustedCtx.putImageData(imageData, 0, 0);
+
+                updateImageInfo(newWidth, newHeight, bits);
+                displayChannels(imageData);
+                calculateAndDrawHistogram(imageData);
+            }
+            
+            function updateUIValues(resolution, width, height, blur, brightness, contrast, levels, bits, threshold) {
+                resolutionValueSpan.textContent = `${Math.round(resolution * 100)}%`;
+                resolutionPixelValueSpan.textContent = `${width} x ${height} 画素`;
+                blurValueSpan.textContent = blur;
+                brightnessValueSpan.textContent = brightness;
+                contrastValueSpan.textContent = contrast;
+                bitDepthValueSpan.textContent = `${bits} bit (${levels}階調)`;
+                binarizationThresholdValueSpan.textContent = threshold;
+            }
+
+            function processPixelData(data, brightness, contrast, levels, useGrayscale, useBinarization, binarizationThreshold, useInvert) {
+                 const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+                 const posterizeStep = levels > 1 ? 255 / (levels - 1) : 0;
+
+                for (let i = 0; i < data.length; i += 4) {
+                    let r = data[i], g = data[i + 1], b = data[i + 2];
+
+                    // 明るさ & コントラスト
+                    r = contrastFactor * (r + brightness - 128) + 128;
+                    g = contrastFactor * (g + brightness - 128) + 128;
+                    b = contrastFactor * (b + brightness - 128) + 128;
+
+                    // 階調化 (ビット深度)
+                    if (levels < 256) {
+                        r = Math.round(r / posterizeStep) * posterizeStep;
+                        g = Math.round(g / posterizeStep) * posterizeStep;
+                        b = Math.round(b / posterizeStep) * posterizeStep;
+                    }
+
+                    // ネガ反転
+                    if (useInvert) {
+                        r = 255 - r;
+                        g = 255 - g;
+                        b = 255 - b;
+                    }
+
+                    // グレースケール & 2値化
+                    if (useGrayscale || useBinarization) {
+                        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                        if (useBinarization) {
+                            const value = gray > binarizationThreshold ? 255 : 0;
+                            r = g = b = value;
+                        } else {
+                            r = g = b = gray;
+                        }
+                    }
+                    
+                    data[i] = Math.max(0, Math.min(255, r));
+                    data[i + 1] = Math.max(0, Math.min(255, g));
+                    data[i + 2] = Math.max(0, Math.min(255, b));
+                }
+            }
+            
+            function applyPosterization() {
+                if (!originalImage) return;
+
+                const levels = parseInt(posterizeLevelSlider.value);
+                const step = levels > 1 ? 255 / (levels - 1) : 0;
+
+                posterizedCanvas.width = originalImage.width;
+                posterizedCanvas.height = originalImage.height;
+                
+                const originalImageData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+                const newData = new Uint8ClampedArray(originalImageData.data);
+
+                for (let i = 0; i < newData.length; i += 4) {
+                    newData[i]     = Math.round(newData[i] / step) * step;
+                    newData[i + 1] = Math.round(newData[i + 1] / step) * step;
+                    newData[i + 2] = Math.round(newData[i + 2] / step) * step;
+                }
+                
+                const posterizedImageData = new ImageData(newData, originalCanvas.width, originalCanvas.height);
+                posterizedCtx.putImageData(posterizedImageData, 0, 0);
+                posterizedCanvas.classList.remove('canvas-placeholder');
+            }
+            
+            function clearPosterizeCanvas() {
+                if (!posterizedCanvas) return;
+                posterizedCtx.clearRect(0, 0, posterizedCanvas.width, posterizedCanvas.height);
+                posterizedCanvas.classList.add('canvas-placeholder');
+                posterizedCanvas.width = 0;
+                posterizedCanvas.height = 0;
+            }
+
+
+            function applyBoxBlur(imageData, radius) {
+                const { width, height, data: src } = imageData;
+                const dst = new Uint8ClampedArray(src.length);
+                const kernelSize = (radius * 2 + 1) * (radius * 2 + 1);
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        let r = 0, g = 0, b = 0;
+                        for (let ky = -radius; ky <= radius; ky++) {
+                            for (let kx = -radius; kx <= radius; kx++) {
+                                const newY = Math.max(0, Math.min(height - 1, y + ky));
+                                const newX = Math.max(0, Math.min(width - 1, x + kx));
+                                const i = (newY * width + newX) * 4;
+                                r += src[i];
+                                g += src[i+1];
+                                b += src[i+2];
+                            }
+                        }
+                        const dstI = (y * width + x) * 4;
+                        dst[dstI] = r / kernelSize;
+                        dst[dstI + 1] = g / kernelSize;
+                        dst[dstI + 2] = b / kernelSize;
+                        dst[dstI + 3] = src[dstI + 3];
+                    }
+                }
+                return new ImageData(dst, width, height);
+            }
+            
+            function updateImageInfo(width, height, bitsPerChannel) {
+                 const megapixel = (width * height / 1000000).toFixed(2);
+                 const isColor = !(grayscaleCheckbox.checked || binarizationCheckbox.checked);
+                 const channels = isColor ? 3 : 1;
+                 const totalBits = width * height * bitsPerChannel * channels;
+                 const dataSize = formatBytes(totalBits / 8);
+
+                 imageInfo.innerHTML = `
+                     元画像サイズ: <strong>${originalImage.width} x ${originalImage.height}</strong> px <br>
+                     推定データ量: <strong>${dataSize}</strong> (${bitsPerChannel}ビット / チャンネル)
+                 `;
+            }
+            
+            function formatBytes(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            function showPixelInfo(e) {
+                if (!originalImage || adjustedCanvas.width === 0) return;
+                const rect = adjustedCanvas.getBoundingClientRect();
+                const scaleX = adjustedCanvas.width / rect.width;
+                const scaleY = adjustedCanvas.height / rect.height;
+                const x = Math.floor((e.clientX - rect.left) * scaleX);
+                const y = Math.floor((e.clientY - rect.top) * scaleY);
+                
+                const pixelData = adjustedCtx.getImageData(x, y, 1, 1).data;
+                const [r, g, b] = pixelData;
+
+                rgbDecValue.textContent = `R:${r}, G:${g}, B:${b}`;
+                const toHex = (c) => c.toString(16).padStart(2, '0').toUpperCase();
+                rgbHexValue.textContent = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+                colorPreview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+            }
+            
+            function clearPixelInfo() {
+                rgbDecValue.textContent = 'R:-, G:-, B:-';
+                rgbHexValue.textContent = '#------';
+                colorPreview.style.backgroundColor = '#f3f4f6';
+            }
+
+            function displayChannels(adjustedImageData) {
+                const { data, width, height } = adjustedImageData;
+                const rData = new Uint8ClampedArray(data.length);
+                const gData = new Uint8ClampedArray(data.length);
+                const bData = new Uint8ClampedArray(data.length);
+
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+                    rData.set([r, 0, 0, a], i);
+                    gData.set([0, g, 0, a], i);
+                    bData.set([0, 0, b, a], i);
+                }
+
+                rCtx.putImageData(new ImageData(rData, width, height), 0, 0);
+                gCtx.putImageData(new ImageData(gData, width, height), 0, 0);
+                bCtx.putImageData(new ImageData(bData, width, height), 0, 0);
+            }
+            
+            function calculateAndDrawHistogram(imageData) {
+                const luma = new Array(256).fill(0);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i], g = data[i+1], b = data[i+2];
+                    const brightness = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+                    luma[brightness]++;
+                }
+
+                if (histogramChart) {
+                    histogramChart.data.datasets[0].data = luma;
+                    histogramChart.update();
+                } else {
+                    histogramChart = new Chart(histogramCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: Array.from({length: 256}, (_, i) => i),
+                            datasets: [{
+                                label: '輝度',
+                                data: luma,
+                                backgroundColor: 'rgba(59, 130, 246, 0.7)', // blue-500
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                borderWidth: 1,
+                                barPercentage: 1,
+                                categoryPercentage: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    intersect: false,
+                                    callbacks: {
+                                        title: (context) => `輝度値: ${context[0].label}`,
+                                        label: (context) => `ピクセル数: ${context.raw.toLocaleString()}`
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    display: true,
+                                    title: { display: true, text: '輝度値 (0-255)' },
+                                    ticks: {
+                                        maxTicksLimit: 10,
+                                        autoSkip: true,
+                                    }
+                                },
+                                y: {
+                                    display: true,
+                                    title: { display: true, text: 'ピクセル数' },
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            function downloadImage() {
+                const link = document.createElement('a');
+                link.download = 'adjusted-image.png';
+                link.href = adjustedCanvas.toDataURL('image/png');
+                link.click();
+            }
+        });
+    </script>
+
+</body>
+</html>
