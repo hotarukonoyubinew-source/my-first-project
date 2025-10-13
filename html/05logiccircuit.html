@@ -57,9 +57,10 @@
                 <li>部品をドラッグして移動できます。</li>
                 <li>背景をドラッグして範囲選択できます。</li>
                 <li>丸い端子をタップ/クリックして配線を開始/終了します。</li>
+                <li>配線をダブルタップ/ダブルクリックで中間端子を挿入できます。</li>
                 <li>スイッチ本体をタップ/クリックしてON/OFFを切り替えます。</li>
-                <li>テキストはダブルクリックで編集できます。</li>
-                <li>部品や配線を右クリックまたは長押しで削除します。</li>
+                <li>テキストはダブルタップ/ダブルクリックで編集できます。</li>
+                <li>部品や配線を右クリックまたは長押し(約0.5秒)で削除します。</li>
                 <li>Deleteキーで選択中の部品を削除できます。</li>
             </ul>
         </div>
@@ -143,16 +144,16 @@
                 HALF_ADDER: (inputs) => {
                     const a = inputs[0] || 0;
                     const b = inputs[1] || 0;
-                    const sum = (a + b) % 2;
-                    const carry = (a === 1 && b === 1) ? 1 : 0;
+                    const sum = (a ^ b);
+                    const carry = (a & b);
                     return { out_s: sum, out_c: carry };
                 },
                 FULL_ADDER: (inputs) => {
                     const a = inputs[0] || 0;
                     const b = inputs[1] || 0;
                     const cin = inputs[2] || 0;
-                    const sum = (a + b + cin) % 2;
-                    const cout = (a + b + cin) >= 2 ? 1 : 0;
+                    const sum = (a ^ b ^ cin);
+                    const cout = ((a & b) | (b & cin) | (a & cin));
                     return { out_s: sum, out_cout: cout };
                 },
                 JUNCTION: (inputs) => ({ out: inputs[0] || 0 }),
@@ -306,7 +307,7 @@
             }
 
             function updateSimulation() {
-                for (let i = 0; i < 15; i++) {
+                for (let i = 0; i < 20; i++) { // Increased iterations for stability with complex components
                     Object.values(components).forEach(comp => comp.inputs.forEach(input => input.value = 0));
                     wires.forEach(wire => {
                         const startComp = components[wire.startComponentId];
@@ -343,11 +344,11 @@
             
             function createComponent(type, x, y) {
                 const id = `comp_${nextId++}`;
-                const def = componentDefs[type];
+                const def = JSON.parse(JSON.stringify(componentDefs[type])); // Deep copy
                 components[id] = {
                     id, ...def, x, y, state: 0,
-                    inputs: def.inputs ? def.inputs.map(i => ({ ...i, value: 0, connected: false })) : [],
-                    outputs: def.outputs ? def.outputs.map(o => ({ ...o, value: 0 })) : [],
+                    inputs: def.inputs.map(i => ({ ...i, value: 0, connected: false })),
+                    outputs: def.outputs.map(o => ({ ...o, value: 0 })),
                 };
                 if(type === 'TEXT') components[id].text = 'テキスト';
                 return components[id];
@@ -429,7 +430,7 @@
 
             // --- Unified Pointer Event Handlers ---
             function onPointerDown(e) {
-                if (e.type === 'touchstart') e.preventDefault();
+                e.preventDefault();
                 const svgP = getSVGPoint(e);
                 const targetNode = e.target.closest('.node');
                 const targetComponent = e.target.closest('.component');
@@ -444,7 +445,7 @@
                             else if (targetComponent) deleteComponent(targetComponent.dataset.id);
                             state.action = 'none';
                         }
-                    }, 750);
+                    }, 500); // Shortened long-press time for better responsiveness
                 }
 
                 if (targetNode) {
@@ -482,11 +483,11 @@
 
             function onPointerMove(e) {
                 if (state.action === 'none') return;
-                if (e.type === 'touchmove') e.preventDefault();
+                e.preventDefault();
                 const svgP = getSVGPoint(e);
                 const dx = Math.abs(svgP.x - state.dragStart.x);
                 const dy = Math.abs(svgP.y - state.dragStart.y);
-                if (dx > 5 || dy > 5) {
+                if (dx > 10 || dy > 10) { // Increased tolerance for touch
                     state.isClick = false;
                     clearTimeout(state.longPressTimer);
                 }
@@ -518,43 +519,45 @@
             
             function onPointerUp(e) {
                 clearTimeout(state.longPressTimer);
+                e.preventDefault();
                 
-                // --- Manual Double-click/tap detection ---
-                if (state.isClick) {
+                const targetNode = e.target.closest('.node');
+
+                if (state.isClick && !targetNode) { // Handle clicks/taps if it's not a wiring action on a node
                     const now = new Date().getTime();
-                    const targetWireEl = e.target.closest('.wire');
-                    if (targetWireEl) {
-                        const wireId = targetWireEl.dataset.id;
-                        if ((now - lastClickInfo.time < 400) && lastClickInfo.targetId === wireId) {
-                            insertJunctionOnWire(wireId, getSVGPoint(e));
-                            lastClickInfo = { time: 0, targetId: null }; // Reset after action
-                            state.action = 'none';
-                            return; // Exit early to prevent other actions
+                    const targetEl = e.target.closest('.wire, .component');
+
+                    if (targetEl) {
+                        const targetId = targetEl.dataset.id;
+                        // Check for Double-click/tap
+                        if ((now - lastClickInfo.time < 400) && lastClickInfo.targetId === targetId) {
+                            if (targetEl.classList.contains('wire')) {
+                                insertJunctionOnWire(targetId, getSVGPoint(e));
+                            } else if (targetEl.classList.contains('component')) {
+                                const comp = components[targetId];
+                                if (comp && comp.type === 'TEXT') {
+                                    editText(targetId);
+                                }
+                            }
+                            lastClickInfo = { time: 0, targetId: null }; // Reset after double click
+                        } else {
+                            // Handle Single-click/tap
+                            if (targetEl.classList.contains('component')) {
+                                const comp = components[targetId];
+                                if (comp && comp.type === 'INPUT' && (e.target.tagName.toLowerCase() === 'rect' || e.target.tagName.toLowerCase() === 'text')) {
+                                    toggleInput(targetId);
+                                }
+                            }
+                            lastClickInfo = { time: now, targetId: targetId }; // Set for next potential double click
                         }
-                        lastClickInfo = { time: now, targetId: wireId };
                     } else {
-                        lastClickInfo = { time: 0, targetId: null }; // Reset if not clicking on a wire
+                        // Clicked on empty canvas, reset double click detector
+                        lastClickInfo = { time: 0, targetId: null };
                     }
                 }
 
-
-                if (state.action === 'none') return;
-                 if (e.type.includes('touch')) e.preventDefault();
-
-                const targetComponent = e.target.closest('.component');
-                const targetNode = e.target.closest('.node');
-                
-                if (state.action === 'dragging' && state.isClick && targetComponent) {
-                    const componentId = targetComponent.dataset.id;
-                    const comp = components[componentId];
-                    if (comp) {
-                        if (comp.type === 'TEXT') {
-                            editText(comp.id);
-                        } else if (comp.type === 'INPUT' && (e.target.tagName.toLowerCase() === 'rect' || e.target.tagName.toLowerCase() === 'text')) {
-                            toggleInput(comp.id);
-                        }
-                    }
-                } else if (state.action === 'selecting') {
+                // Handle end of other actions
+                if (state.action === 'selecting') {
                     if (state.selectionBox) {
                         const box = state.selectionBox.getBBox();
                         selectedComponentIds.clear();
@@ -578,6 +581,7 @@
                     }
                 }
                 
+                // Reset state for the next action
                 state.action = 'none';
                 state.selectionBox = null;
                 state.wiring.tempLine = null;
@@ -640,6 +644,7 @@
 
             document.body.addEventListener('touchend', (e) => {
                 if (!ghostElement) return;
+                e.preventDefault();
                 const touch = e.changedTouches[0];
                 const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
                 if (dropTarget && dropTarget.id === 'circuit-canvas') {
@@ -688,9 +693,13 @@
                             wires = data.wires;
                             nextId = data.nextId;
                             selectedComponentIds.clear();
+                            // Re-establish prototype chain for logic functions if needed after loading
+                            Object.values(components).forEach(c => {
+                                // This is usually not necessary with this structure, but good to keep in mind for complex objects
+                            });
                             updateSimulation();
                         } else { alert('無効なファイル形式です。'); }
-                    } catch (err) { alert('ファイルの読み込みに失敗しました。'); }
+                    } catch (err) { console.error(err); alert('ファイルの読み込みに失敗しました。'); }
                 };
                 reader.readAsText(file);
                 e.target.value = '';
@@ -706,7 +715,9 @@
             textModalOk.addEventListener('click', () => {
                 if (currentEditingTextId) {
                     const comp = components[currentEditingTextId];
-                    comp.text = textModalInput.value;
+                    if (comp) {
+                        comp.text = textModalInput.value;
+                    }
                     textModal.classList.add('hidden');
                     currentEditingTextId = null;
                     draw();
