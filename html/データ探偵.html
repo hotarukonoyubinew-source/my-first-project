@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Quest: データ探偵の事件簿</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Zen Maru Gothic', sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+        .font-game {
+            font-family: 'Mochiy Pop One', sans-serif;
+        }
+        
+        /* カードとテーブルのアニメーション */
+        .table-row-item {
+            transition: all 0.5s ease;
+        }
+        .row-hidden {
+            opacity: 0.1;
+            transform: scale(0.95);
+            filter: grayscale(100%);
+        }
+        .row-highlight {
+            background-color: rgba(52, 211, 153, 0.2);
+            border-left: 4px solid #34d399;
+        }
+
+        /* スロット（空欄）のスタイル */
+        .sql-slot {
+            transition: all 0.2s;
+            cursor: pointer;
+            border-bottom: 3px solid #4b5563;
+        }
+        .sql-slot:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        .sql-slot.filled {
+            border-bottom-color: #3b82f6;
+            color: #60a5fa;
+            font-weight: bold;
+        }
+        .sql-slot.active {
+            border-bottom-color: #f59e0b;
+            background-color: rgba(245, 158, 11, 0.1);
+        }
+        .sql-slot.correct {
+            border-bottom-color: #10b981;
+            color: #10b981;
+        }
+        .sql-slot.wrong {
+            border-bottom-color: #ef4444;
+            color: #ef4444;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* 選択肢モーダル */
+        .option-btn {
+            transition: transform 0.1s;
+        }
+        .option-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* パーティクルエフェクト */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            animation: float-up 1s ease-out forwards;
+        }
+        @keyframes float-up {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-50px) scale(1.5); opacity: 0; }
+        }
+
+        /* JOINアニメーション用 */
+        .table-container {
+            transition: all 1s ease;
+        }
+        .joining .table-left {
+            transform: translateX(20px);
+            opacity: 0; /* 近づいて消える演出のため */
+        }
+        .joining .table-right {
+            transform: translateX(-20px);
+            opacity: 0; /* 近づいて消える演出のため */
+        }
+        
+        /* 結合線のスタイル（簡易的） */
+        .join-line {
+            height: 2px;
+            background: #f59e0b;
+            position: absolute;
+            z-index: 10;
+            transform-origin: left center;
+        }
+
+        /* 修了書の背景パターン */
+        .certificate-bg {
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- ゲームコンテナ -->
+    <div id="game-app" class="w-full max-w-4xl bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-700 relative">
+        
+        <!-- ヘッダー -->
+        <header class="bg-gray-900 p-4 flex justify-between items-center border-b border-gray-700">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-database text-blue-400 text-2xl"></i>
+                <h1 class="font-game text-xl md:text-2xl text-white">SQL Quest <span class="text-xs text-gray-400 font-normal">データ探偵の事件簿</span></h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="bg-gray-800 px-3 py-1 rounded-full border border-gray-600">
+                    <span class="text-xs text-gray-400">LEVEL</span>
+                    <span id="level-display" class="font-bold text-yellow-400 text-lg ml-1">1</span>
+                </div>
+                <button onclick="resetGame()" class="text-gray-500 hover:text-red-400 transition" title="最初からやり直す">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- メインエリア -->
+        <main class="p-4 md:p-6 space-y-6">
+
+            <!-- キャラクター＆ミッション -->
+            <div class="flex flex-col md:flex-row gap-4 items-start bg-gray-700/50 p-4 rounded-xl border border-gray-600">
+                <div class="flex-shrink-0 bg-blue-500/20 p-3 rounded-full">
+                    <i class="fa-solid fa-user-secret text-4xl text-blue-300"></i>
+                </div>
+                <div class="flex-grow">
+                    <h2 class="text-blue-300 font-bold text-sm mb-1">依頼内容 (ミッション)</h2>
+                    <p id="mission-text" class="text-lg md:text-xl font-bold leading-relaxed">
+                        ここにミッションが表示されます。
+                    </p>
+                    <div id="hint-area" class="mt-2 hidden">
+                        <span class="text-yellow-400 text-sm"><i class="fa-regular fa-lightbulb"></i> ヒント: <span id="hint-text"></span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SQLビルダー（パズルエリア） -->
+            <div class="bg-gray-900 p-6 rounded-xl border-2 border-dashed border-gray-600 relative">
+                <div class="absolute -top-3 left-4 bg-gray-800 px-2 text-xs text-gray-400">SQL エディタ</div>
+                
+                <div id="sql-builder" class="flex flex-wrap items-center gap-2 text-lg md:text-2xl font-mono min-h-[60px]">
+                    <!-- ここにJSでスロットが生成されます -->
+                </div>
+
+                <div class="mt-6 flex justify-end gap-4">
+                    <button id="run-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-8 rounded-lg shadow-lg transform transition active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-play"></i> 実行 (RUN)
+                    </button>
+                    <!-- 確認ボタンを追加 -->
+                    <button id="check-result-btn" class="hidden bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-8 rounded-lg shadow-lg transform transition active:scale-95 flex items-center gap-2 animate-bounce">
+                        <i class="fa-solid fa-check"></i> 結果を確認して次へ
+                    </button>
+                </div>
+            </div>
+
+            <!-- データベース（可視化エリア） -->
+            <div class="relative min-h-[250px] bg-gray-800 rounded-xl overflow-hidden">
+                <div class="bg-gray-700 px-4 py-2 text-xs text-gray-300 flex justify-between">
+                    <span>データベースプレビュー</span>
+                    <span id="row-count" class="text-gray-400">4件</span>
+                </div>
+                
+                <div id="tables-container" class="p-4 flex flex-col md:flex-row gap-8 justify-center items-start overflow-x-auto">
+                    <!-- 商品テーブル -->
+                    <div id="table-products" class="w-full md:w-auto flex-shrink-0 transition-all duration-500">
+                        <div class="text-center mb-2 font-bold text-blue-300 bg-blue-900/30 py-1 rounded">商品テーブル</div>
+                        <table class="w-full text-sm text-left border-collapse">
+                            <thead class="text-xs text-gray-400 uppercase bg-gray-700">
+                                <tr>
+                                    <th class="px-3 py-2 rounded-tl-lg">商品ID</th>
+                                    <th class="px-3 py-2">商品名</th>
+                                    <th class="px-3 py-2">値段</th>
+                                    <th class="px-3 py-2 rounded-tr-lg">会社ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-products" class="bg-gray-750 text-gray-300">
+                                <!-- JSで生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 会社テーブル -->
+                    <div id="table-companies" class="w-full md:w-auto flex-shrink-0 transition-all duration-500 hidden opacity-0">
+                        <div class="text-center mb-2 font-bold text-purple-300 bg-purple-900/30 py-1 rounded">会社テーブル</div>
+                        <table class="w-full text-sm text-left border-collapse">
+                            <thead class="text-xs text-gray-400 uppercase bg-gray-700">
+                                <tr>
+                                    <th class="px-3 py-2 rounded-tl-lg">会社ID</th>
+                                    <th class="px-3 py-2">会社名</th>
+                                    <th class="px-3 py-2 rounded-tr-lg">社長</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-companies" class="bg-gray-750 text-gray-300">
+                                <!-- JSで生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 結合結果テーブル (JOIN用) -->
+                    <div id="table-joined" class="w-full hidden transition-all duration-500 opacity-0">
+                        <div class="text-center mb-2 font-bold text-green-300 bg-green-900/30 py-1 rounded">結合テーブル (商品 + 会社)</div>
+                        <table class="w-full text-sm text-left border-collapse">
+                            <thead class="text-xs text-gray-400 uppercase bg-gray-700">
+                                <tr>
+                                    <th class="px-3 py-2 rounded-tl-lg">商品ID</th>
+                                    <th class="px-3 py-2">商品名</th>
+                                    <th class="px-3 py-2">値段</th>
+                                    <th class="px-3 py-2 text-yellow-300">会社ID</th>
+                                    <th class="px-3 py-2 text-purple-300">会社名</th>
+                                    <th class="px-3 py-2 rounded-tr-lg">社長</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-joined" class="bg-gray-750 text-gray-300">
+                                <!-- JSで生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 結果フィードバックオーバーレイ -->
+                <div id="feedback-overlay" class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-sm hidden z-20">
+                    <div id="feedback-icon" class="text-6xl mb-4"></div>
+                    <h3 id="feedback-title" class="text-2xl font-bold mb-2 font-game text-white"></h3>
+                    <p id="feedback-msg" class="text-gray-300 mb-6 text-center px-4"></p>
+                    <button id="next-level-btn" class="hidden bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 px-8 rounded-full shadow-lg transform transition hover:scale-105">
+                        次のレベルへ <i class="fa-solid fa-arrow-right ml-2"></i>
+                    </button>
+                    <button id="retry-btn" class="hidden bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-full">
+                        閉じる
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- 選択肢モーダル -->
+    <div id="options-modal" class="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 w-full md:w-auto md:min-w-[400px] md:rounded-2xl rounded-t-2xl p-6 border border-gray-600 shadow-2xl transform transition-all translate-y-0">
+            <h3 class="text-gray-400 text-sm mb-4 font-bold border-b border-gray-700 pb-2">これに入る言葉は？</h3>
+            <div id="options-list" class="grid grid-cols-2 gap-3">
+                <!-- JSでボタン生成 -->
+            </div>
+            <button onclick="closeModal()" class="mt-6 w-full py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600">キャンセル</button>
+        </div>
+    </div>
+
+    <!-- 修了書オーバーレイ -->
+    <div id="certificate-overlay" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden backdrop-blur-sm">
+        <div class="bg-white certificate-bg text-gray-800 p-8 rounded-xl max-w-lg w-full mx-4 border-8 border-yellow-500 shadow-2xl relative text-center transform transition-all scale-100">
+            <!-- バッジ -->
+            <div class="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white px-6 py-2 rounded-full font-bold shadow-lg border-2 border-yellow-400 flex items-center gap-2">
+                <i class="fa-solid fa-crown text-yellow-100"></i> MASTER
+            </div>
+            
+            <h2 class="text-3xl md:text-4xl font-bold mb-2 font-game text-yellow-600 mt-6">修了書</h2>
+            <p class="text-sm text-gray-500 font-bold mb-6 tracking-widest">CERTIFICATE OF COMPLETION</p>
+            
+            <div class="bg-gray-50 p-6 rounded-lg mb-8 text-center border-2 border-gray-200 relative mx-auto shadow-inner">
+                <i class="fa-solid fa-quote-left text-4xl text-gray-200 absolute top-2 left-2"></i>
+                <i class="fa-solid fa-quote-right text-4xl text-gray-200 absolute bottom-2 right-2"></i>
+                <p class="relative z-10 text-xl font-bold text-gray-700 font-serif leading-loose py-2">
+                    お勧めの料理を教えて。<br>
+                    これをアンケートに書いて終了の証とします
+                </p>
+            </div>
+            
+            <p class="text-gray-500 text-sm mb-6">全カリキュラムを修了しました。<br>あなたは素晴らしいデータ探偵です！</p>
+
+            <!-- ボタンを削除しました -->
+        </div>
+    </div>
+
+    <script>
+        // --- データ定義 ---
+        const productsData = [
+            { id: 1, name: 'ポテチ', price: 150, companyId: 'A01' },
+            { id: 2, name: 'コーラ', price: 160, companyId: 'B02' },
+            { id: 3, name: 'チョコ', price: 120, companyId: 'B02' },
+            { id: 4, name: 'お茶', price: 140, companyId: 'A01' },
+            { id: 5, name: 'ガム', price: 100, companyId: 'A01' }
+        ];
+
+        const companiesData = [
+            { id: 'A01', name: 'A社', ceo: '佐藤' },
+            { id: 'B02', name: 'B社', ceo: '鈴木' },
+            { id: 'C03', name: 'C社', ceo: '高橋' }
+        ];
+
+        // --- ゲームレベル定義 ---
+        const levels = [
+            {
+                id: 1,
+                mission: "まずは基本だ！「商品」テーブルのデータを全て表示してくれ。",
+                hint: "「すべて」を選ぶ時は記号の『*』を使うぞ。",
+                template: ["SELECT", null, "FROM", null], // nullは空欄
+                correct: ["*", "商品"],
+                options: ["*", "商品ID", "商品", "会社", "名前"],
+                checkLogic: (row) => true, // 全て表示
+                showCompanyTable: false,
+                isJoin: false
+            },
+            {
+                id: 2,
+                mission: "特定のデータを探すぞ。「値段」が「140円」の商品だけ抜き出してくれ。",
+                hint: "条件を指定する時は『WHERE』を使う。数字はそのまま選べばいい。",
+                template: ["SELECT", "*", "FROM", "商品", null, "値段", "=", null],
+                correct: ["WHERE", "140"],
+                options: ["WHERE", "JOIN", "140", "150", "100", "'140'"],
+                checkLogic: (row) => row.price === 140,
+                showCompanyTable: false,
+                isJoin: false
+            },
+            {
+                id: 3,
+                mission: "文字で検索だ。「会社ID」が「B02」の商品を見つけてくれ。",
+                hint: "文字を条件にする時は、シングルクォーテーション(')で囲むのを忘れるな！",
+                template: ["SELECT", "*", "FROM", "商品", "WHERE", "会社ID", "=", null],
+                correct: ["'B02'"],
+                options: ["B02", "'B02'", "'A01'", "会社ID", "*"],
+                checkLogic: (row) => row.companyId === 'B02',
+                showCompanyTable: false,
+                isJoin: false
+            },
+            {
+                id: 4,
+                mission: "レベルアップだ！「商品」テーブルと「会社」テーブルを合体(JOIN)させてくれ。",
+                hint: "2つのテーブルをくっつけるのは『JOIN』。共通点は『会社ID』だ！",
+                template: ["SELECT", "*", "FROM", "商品", null, "会社", "ON", "商品.会社ID", "=", null],
+                correct: ["JOIN", "会社.会社ID"],
+                options: ["JOIN", "WHERE", "会社.会社ID", "商品.会社ID", "会社.名前"],
+                checkLogic: (row) => true, // 結合表示が目的なのでフィルタはなし
+                showCompanyTable: true,
+                isJoin: true
+            },
+            {
+                id: 5,
+                mission: "最終試験だ！テーブルを合体(JOIN)させた上で、「B社」の商品だけを表示せよ！",
+                hint: "JOINで合体させた後に、WHEREで「B社」に絞り込むんだ。",
+                template: ["SELECT", "*", "FROM", "商品", "JOIN", "会社", "ON", "商品.会社ID", "=", "会社.会社ID", null, "会社.会社名", "=", null],
+                correct: ["WHERE", "'B社'"],
+                options: ["WHERE", "JOIN", "'A社'", "'B社'", "B社", "ON"],
+                checkLogic: (row) => row.companyId === 'B02', // B02がB社
+                showCompanyTable: true,
+                isJoin: true
+            }
+        ];
+
+        // --- グローバルステート ---
+        let currentLevelIndex = 0;
+        let currentSlots = [];
+        let wrongAttempts = 0;
+        let activeSlotIndex = -1;
+
+        // --- 初期化 ---
+        function initGame() {
+            // セーブデータ読み込み
+            const savedLevel = localStorage.getItem('sqlQuestLevel');
+            if (savedLevel) {
+                currentLevelIndex = parseInt(savedLevel);
+                if (currentLevelIndex >= levels.length) currentLevelIndex = 0;
+            }
+            renderLevel();
+
+            // 結果確認ボタンのクリックイベントを設定
+            document.getElementById('check-result-btn').onclick = () => {
+                showFeedback(true, "クエリ成功！", "完璧だ！狙い通りのデータを抽出できたぞ。");
+            };
+        }
+
+        function resetGame() {
+            if(confirm("最初のレベルに戻りますか？")) {
+                localStorage.removeItem('sqlQuestLevel');
+                currentLevelIndex = 0;
+                renderLevel();
+            }
+        }
+
+        // --- レベル描画 ---
+        function renderLevel() {
+            const level = levels[currentLevelIndex];
+            
+            // ボタンの表示状態をリセット（実行ボタンを表示、確認ボタンを隠す）
+            document.getElementById('run-btn').classList.remove('hidden');
+            document.getElementById('check-result-btn').classList.add('hidden');
+            // オーバーレイを隠す（通常のフィードバックと修了書の両方）
+            document.getElementById('feedback-overlay').classList.add('hidden');
+            document.getElementById('certificate-overlay').classList.add('hidden');
+
+
+            // HUD更新
+            document.getElementById('level-display').textContent = level.id;
+            document.getElementById('mission-text').textContent = level.mission;
+            document.getElementById('hint-area').classList.add('hidden');
+            document.getElementById('hint-text').textContent = level.hint;
+            document.getElementById('run-btn').disabled = true;
+            wrongAttempts = 0;
+
+            // テーブル描画（初期状態）
+            renderTables(level.showCompanyTable);
+
+            // SQLビルダー構築
+            const builder = document.getElementById('sql-builder');
+            builder.innerHTML = '';
+            currentSlots = [];
+
+            let slotCounter = 0;
+            level.template.forEach((token, index) => {
+                const el = document.createElement('div');
+                el.className = 'px-2 py-1 rounded mx-1 font-mono flex items-center justify-center';
+                
+                if (token === null) {
+                    // ユーザー入力スロット
+                    el.className += ' sql-slot bg-gray-800 min-w-[60px] h-[40px] text-blue-400';
+                    el.dataset.slotIndex = slotCounter;
+                    el.dataset.filled = "false";
+                    el.textContent = "?";
+                    el.onclick = () => openOptions(index, slotCounter);
+                    // スロットの状態管理用オブジェクト作成
+                    currentSlots.push({ 
+                        element: el, 
+                        value: null, 
+                        correctValue: level.correct[slotCounter] 
+                    });
+                    
+                    // クロージャの問題を避けるため、即時関数の代わりにletを使用 (ブロックスコープ)
+                    const currentSlotIdx = slotCounter;
+                    el.onclick = () => openOptions(currentSlotIdx);
+
+                    slotCounter++;
+                } else {
+                    // 固定テキスト
+                    el.textContent = token;
+                    if (['SELECT', 'FROM', 'WHERE', 'JOIN', 'ON'].includes(token)) {
+                        el.className += ' text-purple-400 font-bold';
+                    } else {
+                        el.className += ' text-gray-300';
+                    }
+                }
+                builder.appendChild(el);
+            });
+        }
+
+        // --- テーブル描画ロジック ---
+        function renderTables(showCompany) {
+            // アニメーションとJOINテーブルの状態をリセット
+            const container = document.getElementById('tables-container');
+            const productsTable = document.getElementById('table-products');
+            const companiesTable = document.getElementById('table-companies');
+            const joinedTable = document.getElementById('table-joined');
+
+            container.classList.remove('joining', 'gap-0');
+            
+            // 各テーブルの表示状態を初期化
+            productsTable.classList.remove('hidden', 'table-left');
+            companiesTable.classList.remove('table-right');
+            joinedTable.classList.add('hidden');
+            joinedTable.classList.add('opacity-0');
+            
+            // 商品テーブルの再描画
+            const tbodyProd = document.getElementById('tbody-products');
+            tbodyProd.innerHTML = '';
+            
+            productsData.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = 'table-row-item border-b border-gray-700 bg-gray-800 hover:bg-gray-700';
+                tr.dataset.id = p.id;
+                tr.dataset.company = p.companyId;
+                tr.dataset.price = p.price;
+                tr.innerHTML = `
+                    <td class="px-3 py-2 font-mono text-gray-400">${p.id}</td>
+                    <td class="px-3 py-2 font-bold text-white">${p.name}</td>
+                    <td class="px-3 py-2 text-right">${p.price}円</td>
+                    <td class="px-3 py-2 font-mono text-yellow-300">${p.companyId}</td>
+                `;
+                tbodyProd.appendChild(tr);
+            });
+
+            // 会社テーブルの制御
+            if (showCompany) {
+                companiesTable.classList.remove('hidden');
+                setTimeout(() => companiesTable.classList.remove('opacity-0'), 100);
+                
+                const tbodyComp = document.getElementById('tbody-companies');
+                tbodyComp.innerHTML = '';
+                companiesData.forEach(c => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-700 bg-gray-800';
+                    tr.dataset.cid = c.id;
+                    tr.innerHTML = `
+                        <td class="px-3 py-2 font-mono text-yellow-300">${c.id}</td>
+                        <td class="px-3 py-2 font-bold text-white">${c.name}</td>
+                        <td class="px-3 py-2">${c.ceo}</td>
+                    `;
+                    tbodyComp.appendChild(tr);
+                });
+            } else {
+                companiesTable.classList.add('opacity-0');
+                companiesTable.classList.add('hidden'); // すぐに隠す
+            }
+        }
+
+        // --- 選択肢モーダル ---
+        function openOptions(slotIdx) {
+            activeSlotIndex = slotIdx;
+            const level = levels[currentLevelIndex];
+            const options = level.options; // 選択肢リスト
+            
+            const list = document.getElementById('options-list');
+            list.innerHTML = '';
+
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "option-btn bg-gray-700 text-white py-3 px-4 rounded font-mono text-lg hover:bg-blue-600 border border-gray-600";
+                btn.textContent = opt;
+                btn.onclick = () => selectOption(opt);
+                list.appendChild(btn);
+            });
+
+            document.getElementById('options-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('options-modal').classList.add('hidden');
+        }
+
+        function selectOption(value) {
+            const slot = currentSlots[activeSlotIndex];
+            slot.value = value;
+            slot.element.textContent = value;
+            slot.element.classList.add('filled');
+            slot.element.dataset.filled = "true";
+            
+            // 全て埋まったかチェック
+            const allFilled = currentSlots.every(s => s.value !== null);
+            document.getElementById('run-btn').disabled = !allFilled;
+
+            closeModal();
+            playSound('pop');
+        }
+
+        // --- 実行と判定 ---
+        document.getElementById('run-btn').onclick = function() {
+            const level = levels[currentLevelIndex];
+            let isCorrect = true;
+
+            // 構文チェック
+            currentSlots.forEach(slot => {
+                if (slot.value !== slot.correctValue) {
+                    isCorrect = false;
+                    slot.element.classList.add('wrong');
+                } else {
+                    slot.element.classList.remove('wrong');
+                    slot.element.classList.add('correct');
+                }
+            });
+
+            if (isCorrect) {
+                // 正解アニメーション
+                playSound('success');
+                animateSuccess(level);
+
+                // 実行ボタンを隠して、確認ボタンを表示する
+                document.getElementById('run-btn').classList.add('hidden');
+                document.getElementById('check-result-btn').classList.remove('hidden');
+            } else {
+                // 不正解
+                playSound('error');
+                wrongAttempts++;
+                animateFailure();
+                if (wrongAttempts >= 2) {
+                    document.getElementById('hint-area').classList.remove('hidden');
+                }
+            }
+        };
+
+        // --- 結果アニメーション ---
+        function animateSuccess(level) {
+            const rows = document.querySelectorAll('#tbody-products .table-row-item');
+            
+            // 1. JOINの場合のアニメーション
+            if (level.isJoin) {
+                const container = document.getElementById('tables-container');
+                const productsTable = document.getElementById('table-products');
+                const companiesTable = document.getElementById('table-companies');
+                const joinedTable = document.getElementById('table-joined');
+                
+                // 視覚的に近づける
+                productsTable.classList.add('table-left');
+                companiesTable.classList.add('table-right');
+                container.classList.add('joining', 'gap-0'); // gapをなくしてくっつける
+                
+                // 少し待ってから結合テーブルを表示
+                setTimeout(() => {
+                    // 元のテーブルを非表示
+                    productsTable.classList.add('hidden');
+                    companiesTable.classList.add('hidden');
+                    
+                    // 結合テーブルを表示
+                    joinedTable.classList.remove('hidden');
+                    setTimeout(() => joinedTable.classList.remove('opacity-0'), 50);
+                    
+                    // 結合データを生成・描画
+                    renderJoinedTable(level);
+                }, 800);
+
+            } else {
+                applyFiltering(rows, level);
+            }
+        }
+
+        // 結合テーブル生成ロジック
+        function renderJoinedTable(level) {
+            const tbody = document.getElementById('tbody-joined');
+            tbody.innerHTML = '';
+            let visibleCount = 0;
+
+            productsData.forEach(p => {
+                const company = companiesData.find(c => c.id === p.companyId);
+                const tr = document.createElement('tr');
+                tr.className = 'table-row-item border-b border-gray-700 bg-gray-800';
+                
+                // フィルタリング判定（Level 5用）
+                const match = level.checkLogic(p);
+
+                if (match) {
+                    tr.classList.add('row-highlight');
+                    tr.classList.add('bg-blue-900/20');
+                    visibleCount++;
+                    // 少し遅れてパーティクル
+                    setTimeout(() => createParticle(tr), 100);
+                } else {
+                    tr.classList.add('row-hidden');
+                }
+
+                tr.innerHTML = `
+                    <td class="px-3 py-2 font-mono text-gray-400">${p.id}</td>
+                    <td class="px-3 py-2 font-bold text-white">${p.name}</td>
+                    <td class="px-3 py-2 text-right">${p.price}円</td>
+                    <td class="px-3 py-2 font-mono text-yellow-300 border-l border-gray-600">${p.companyId}</td>
+                    <td class="px-3 py-2 font-bold text-purple-300">${company ? company.name : '-'}</td>
+                    <td class="px-3 py-2">${company ? company.ceo : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('row-count').textContent = `${visibleCount}件ヒット`;
+        }
+
+        function applyFiltering(rows, level) {
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const p = productsData.find(pd => pd.id == row.dataset.id);
+                // レベルごとの判定ロジックでフィルタリング
+                const match = level.checkLogic(p);
+
+                if (match) {
+                    row.classList.add('row-highlight');
+                    row.classList.remove('row-hidden');
+                    visibleCount++;
+                    
+                    // パーティクル発生
+                    createParticle(row);
+                } else {
+                    row.classList.remove('row-highlight');
+                    row.classList.add('row-hidden');
+                }
+            });
+
+            document.getElementById('row-count').textContent = `${visibleCount}件ヒット`;
+        }
+
+        function animateFailure() {
+            document.querySelectorAll('.sql-slot.wrong').forEach(el => {
+                // アニメーションのリセットハック
+                el.style.animation = 'none';
+                el.offsetHeight; /* trigger reflow */
+                el.style.animation = 'shake 0.5s';
+            });
+            
+            setTimeout(() => {
+                showFeedback(false, "エラー発生", "構文が間違っているか、条件が違うようだ…。ヒントを見てみよう。");
+            }, 600);
+        }
+
+        // --- フィードバック画面 ---
+        function showFeedback(success, title, msg) {
+            const overlay = document.getElementById('feedback-overlay');
+            const icon = document.getElementById('feedback-icon');
+            const btnNext = document.getElementById('next-level-btn');
+            const btnRetry = document.getElementById('retry-btn');
+
+            document.getElementById('feedback-title').textContent = title;
+            document.getElementById('feedback-msg').textContent = msg;
+
+            if (success) {
+                icon.innerHTML = '<i class="fa-solid fa-circle-check text-green-500"></i>';
+                btnNext.classList.remove('hidden');
+                btnRetry.classList.add('hidden');
+                
+                // レベル保存
+                localStorage.setItem('sqlQuestLevel', currentLevelIndex + 1);
+                
+                btnNext.onclick = () => {
+                    if (currentLevelIndex < levels.length - 1) {
+                        currentLevelIndex++;
+                        renderLevel();
+                    } else {
+                        // 全クリア: フィードバックを消して修了書を表示
+                        overlay.classList.add('hidden');
+                        showCertificate();
+                    }
+                };
+            } else {
+                icon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i>';
+                btnNext.classList.add('hidden');
+                btnRetry.classList.remove('hidden');
+                
+                btnRetry.onclick = () => {
+                    overlay.classList.add('hidden');
+                };
+            }
+
+            overlay.classList.remove('hidden');
+        }
+
+        // --- 修了書表示 ---
+        function showCertificate() {
+            document.getElementById('certificate-overlay').classList.remove('hidden');
+            playSound('success');
+        }
+
+        // restartGameComplete 関数を削除しました
+
+        // --- 演出用ヘルパー ---
+        function createParticle(element) {
+            const rect = element.getBoundingClientRect();
+            // 簡易的なパーティクル（星）
+            const star = document.createElement('div');
+            star.textContent = "✨";
+            star.className = "particle text-yellow-300 text-xl";
+            star.style.left = (rect.left + rect.width / 2) + "px";
+            star.style.top = rect.top + "px";
+            document.body.appendChild(star);
+            
+            setTimeout(() => star.remove(), 1000);
+        }
+
+        function playSound(type) {
+            // ブラウザの制限で音声ファイルを使わずに、視覚効果で「音」を表現
+        }
+
+        // --- ゲーム開始 ---
+        window.onload = initGame;
+
+    </script>
+</body>
+</html>
