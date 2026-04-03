@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQLデータベース体験ゲーム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .table-container {
+            max-height: 250px;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        .feedback-correct {
+            box-shadow: 0 0 20px rgba(52, 211, 153, 0.7);
+        }
+        .feedback-incorrect {
+            animation: shake 0.5s;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .btn-primary {
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .styled-select {
+            -webkit-appearance: none; -moz-appearance: none; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5' /%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1em;
+        }
+        .tab-btn.active {
+            border-color: #4f46e5;
+            color: #4f46e5;
+            background-color: #eef2ff;
+        }
+        .mode-tab.active {
+            border-color: #4f46e5;
+            color: #4f46e5;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-screen-2xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-indigo-400">SQLデータベース体験ゲーム</h1>
+            <p class="mt-2 text-lg text-gray-600 dark:text-gray-400">射影・選択・結合をマスターしよう！</p>
+        </header>
+
+        <div class="mb-8 flex justify-center border-b border-gray-200 dark:border-gray-700">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <button id="mode-problem" class="mode-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">
+                    問題モード
+                </button>
+                <button id="mode-free" class="mode-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">
+                    自由モード
+                </button>
+            </nav>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <!-- Left Panel: Controls -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 flex flex-col gap-6">
+                <div id="problem-mode-ui" class="space-y-6">
+                    <div class="bg-indigo-50 dark:bg-indigo-900/50 p-4 rounded-lg border-l-4 border-indigo-500">
+                        <h2 class="text-xl font-bold mb-2">現在のミッション <span id="mission-counter" class="text-base font-medium text-indigo-700 dark:text-indigo-300"></span></h2>
+                        <p id="mission-text" class="text-lg"></p>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <div class="text-xl font-bold">スコア: <span id="score" class="text-green-500">0</span></div>
+                        <button id="surrender-button" class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg btn-primary">降参です</button>
+                    </div>
+                </div>
+
+                <div id="query-builder-container" class="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 space-y-4">
+                    <!-- SQL Preview -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">生成されるSQL文</label>
+                        <div class="bg-gray-900 text-green-400 font-mono p-3 rounded-md text-sm overflow-x-auto whitespace-pre-wrap break-all min-h-[100px]">
+                            <code id="sql-query-display"></code>
+                        </div>
+                    </div>
+                    <!-- SELECT Clause -->
+                    <details class="group" open>
+                        <summary class="text-lg font-semibold cursor-pointer">SELECT句 (射影)</summary>
+                        <div id="select-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2 text-sm p-2 bg-white dark:bg-gray-800 rounded"></div>
+                    </details>
+                    <!-- FROM/JOIN Clause -->
+                    <details class="group" open>
+                        <summary class="text-lg font-semibold cursor-pointer">FROM / JOIN句 (テーブル選択・結合)</summary>
+                        <div id="from-join-container" class="space-y-3 mt-2 p-2"></div>
+                        <button data-action="add-join" class="mt-2 bg-blue-500 text-white font-semibold py-1 px-3 rounded-lg btn-primary text-sm">JOINを追加</button>
+                    </details>
+                     <!-- WHERE Clause -->
+                    <details class="group" open>
+                        <summary class="text-lg font-semibold cursor-pointer">WHERE句 (選択)</summary>
+                        <div id="conditions-container" class="space-y-3 mt-2 p-2"></div>
+                        <button data-action="add-where" class="mt-2 bg-green-500 text-white font-semibold py-1 px-3 rounded-lg btn-primary text-sm">条件を追加 (AND)</button>
+                    </details>
+                </div>
+
+                <button id="execute-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-lg text-xl btn-primary">
+                    実行
+                </button>
+            </div>
+
+            <!-- Right Panel: Tables -->
+            <div class="space-y-8">
+                <!-- Source Tables -->
+                <div>
+                    <h2 class="text-2xl font-bold mb-4">元のテーブル</h2>
+                    <div class="border-b border-gray-200 dark:border-gray-700">
+                        <nav id="table-tabs" class="-mb-px flex space-x-4" aria-label="Tabs"></nav>
+                    </div>
+                    <div id="base-tables-container" class="mt-4"></div>
+                </div>
+
+                <!-- Intermediate Join Result Tables -->
+                <div id="intermediate-joins-container" class="space-y-8">
+                    <!-- Intermediate tables will be injected here by JS -->
+                </div>
+
+                <!-- Final Result Table -->
+                <div id="result-container" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 transition-all duration-300">
+                    <h2 class="text-2xl font-bold mb-4">抽出結果</h2>
+                    <div id="feedback-message" class="text-center p-4 rounded-lg mb-4 font-semibold text-lg">
+                        SQL文を組み立てて「実行」ボタンを押そう！
+                    </div>
+                     <!-- Executed SQL -->
+                    <div id="executed-sql-container" class="mb-4 hidden">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">実行されたSQL文</label>
+                        <div class="bg-gray-800 text-cyan-400 font-mono p-3 rounded-md text-sm overflow-x-auto whitespace-pre-wrap break-all">
+                            <code id="executed-sql-display"></code>
+                        </div>
+                    </div>
+                    <div class="table-container border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <table class="w-full text-sm text-left">
+                            <thead id="result-table-head" class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-50 dark:bg-gray-700 sticky top-0"></thead>
+                            <tbody id="result-table-body" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    // --- 1. DATA & STATE (All identifiers are now Japanese) ---
+
+    const database = {
+        '商品': { 
+            name: '商品', 
+            columns: { '商品ID': '商品ID', '商品名': '商品名', '価格': '価格', '会社ID': '会社ID' }, 
+            data: [
+                { '商品ID': 1, '商品名': '高性能マウス', '価格': 3000, '会社ID': 1 },
+                { '商品ID': 2, '商品名': '静音キーボード', '価格': 5000, '会社ID': 2 },
+                { '商品ID': 3, '商品名': 'USBハブ', '価格': 1500, '会社ID': 1 },
+                { '商品ID': 4, '商品名': 'Webカメラ', '価格': 8000, '会社ID': 3 },
+                { '商品ID': 5, '商品名': 'モニターアーム', '価格': 4500, '会社ID': 2 },
+                { '商品ID': 6, '商品名': 'ノートPCスタンド', '価格': 2500, '会社ID': 1 },
+                { '商品ID': 7, '商品名': 'ワイヤレスイヤホン', '価格': 12000, '会社ID': 3 },
+                { '商品ID': 8, '商品名': '充電ステーション', '価格': 3500, '会社ID': 2 },
+            ] 
+        },
+        '会社': { 
+            name: '会社', 
+            columns: { '会社ID': '会社ID', '会社名': '会社名' }, 
+            data: [ { '会社ID': 1, '会社名': 'A社' }, { '会社ID': 2, '会社名': 'B社' }, { '会社ID': 3, '会社名': 'C社' } ] 
+        },
+        '販売履歴': { 
+            name: '販売履歴', 
+            columns: { '販売ID': '販売ID', '商品ID': '商品ID', '顧客ID': '顧客ID', '販売日時': '販売日時' }, 
+            data: [ 
+                { '販売ID': 1, '商品ID': 1, '顧客ID': 1, '販売日時': '2025-09-01 10:30' },
+                { '販売ID': 2, '商品ID': 2, '顧客ID': 2, '販売日時': '2025-09-01 11:00' },
+                { '販売ID': 3, '商品ID': 4, '顧客ID': 2, '販売日時': '2025-09-02 14:00' },
+                { '販売ID': 4, '商品ID': 5, '顧客ID': 1, '販売日時': '2025-09-02 15:30' },
+                { '販売ID': 5, '商品ID': 7, '顧客ID': 1, '販売日時': '2025-09-03 10:00' },
+                { '販売ID': 6, '商品ID': 8, '顧客ID': 2, '販売日時': '2025-09-03 11:45' },
+            ] 
+        },
+        '顧客': { 
+            name: '顧客', 
+            columns: { '顧客ID': '顧客ID', '性別': '性別' }, 
+            data: [ { '顧客ID': 1, '性別': '男性' }, { '顧客ID': 2, '性別': '女性' } ] 
+        }
+    };
+
+    const missions = [
+        { text: "【射影】商品テーブルから「商品名」と「価格」の列だけを抽出してください。", hint: "SELECT句のエリアで、「商品.商品名」と「商品.価格」にだけチェックを入れましょう。FROMは「商品」のままでOKです。", setup: { select: { all: false, columns: new Set(['商品.商品名', '商品.価格'])}, from: '商品', joins: [], where: [] } },
+        { text: "【選択】商品テーブルから、価格が「5000円」以上の商品を抽出してください。", hint: "WHERE句で条件を1つ作ります。列は「商品.価格」、演算子は「>=」、値は「5000」です。", setup: { select: { all: true, columns: new Set()}, from: '商品', joins: [], where: [{ id: 1, column: '商品.価格', operator: '>=', value: '5000' }] } },
+        { text: "【結合と射影】商品テーブルと会社テーブルを結合し、「商品名」と「会社名」を抽出してください。", hint: "FROMを「商品」にし、JOINで「会社」を追加します。結合キーは「商品.会社ID」と「会社.会社ID」です。SELECT句で「商品.商品名」と「会社.会社名」にチェックを入れます。", setup: { select: { all: false, columns: new Set(['商品.商品名', '会社.会社名'])}, from: '商品', joins: [{ id: 1, table: '会社', on: { left: '商品.会社ID', right: '会社.会社ID' }}], where: [] } },
+        { text: "【結合と選択】商品テーブルと会社テーブルを結合し、「B社」の製品だけを抽出してください。", hint: "まずテーブルを結合します。次に、WHERE句で「会社.会社名」が「B社」と等しい、という条件を追加します。", setup: { select: { all: true, columns: new Set()}, from: '商品', joins: [{ id: 1, table: '会社', on: { left: '商品.会社ID', right: '会社.会社ID' }}], where: [{ id: 1, column: '会社.会社名', operator: '=', value: 'B社' }] } },
+        { text: "【高難易度】「女性」が購入した「商品名」を抽出してください。", hint: "3つのテーブル（販売履歴, 顧客, 商品）を結合する必要があります。販売履歴を起点に顧客と商品をJOINしましょう。最後にWHERE句で性別を絞り込み、SELECT句で商品名だけを選びます。", setup: { select: { all: false, columns: new Set(['商品.商品名'])}, from: '販売履歴', joins: [{ id: 1, table: '顧客', on: { left: '販売履歴.顧客ID', right: '顧客.顧客ID' }}, { id: 2, table: '商品', on: { left: '販売履歴.商品ID', right: '商品.商品ID' }}], where: [{ id: 1, column: '顧客.性別', operator: '=', value: '女性' }] } }
+    ];
+
+    let queryState;
+    let score = 0;
+    let currentMissionIndex = 0;
+    let surrendered = false;
+    let currentMode = 'problem'; // 'problem' or 'free'
+    
+    const dom = {
+        missionText: document.getElementById('mission-text'),
+        missionCounter: document.getElementById('mission-counter'),
+        score: document.getElementById('score'),
+        surrenderButton: document.getElementById('surrender-button'),
+        queryBuilderContainer: document.getElementById('query-builder-container'),
+        sqlQueryDisplay: document.getElementById('sql-query-display'),
+        selectContainer: document.getElementById('select-container'),
+        fromJoinContainer: document.getElementById('from-join-container'),
+        conditionsContainer: document.getElementById('conditions-container'),
+        executeButton: document.getElementById('execute-button'),
+        tableTabs: document.getElementById('table-tabs'),
+        baseTablesContainer: document.getElementById('base-tables-container'),
+        resultContainer: document.getElementById('result-container'),
+        feedbackMessage: document.getElementById('feedback-message'),
+        resultTableHead: document.getElementById('result-table-head'),
+        resultTableBody: document.getElementById('result-table-body'),
+        intermediateJoinsContainer: document.getElementById('intermediate-joins-container'),
+        executedSqlContainer: document.getElementById('executed-sql-container'),
+        executedSqlDisplay: document.getElementById('executed-sql-display'),
+        modeProblem: document.getElementById('mode-problem'),
+        modeFree: document.getElementById('mode-free'),
+        problemModeUI: document.getElementById('problem-mode-ui'),
+    };
+
+    // --- 2. RENDER FUNCTIONS (State -> UI) ---
+    
+    function renderAll() {
+        renderSelectClause();
+        renderFromJoinClause();
+        renderWhereClause();
+        renderSQLPreview();
+    }
+
+    function renderSelectClause() {
+        let html = '';
+        const allChecked = queryState.select.all ? 'checked' : '';
+        html += `<div class="w-full col-span-full"><label class="flex items-center gap-1"><input type="checkbox" data-action="select-all" ${allChecked}><span>すべて選択</span></label></div>`;
+        
+        for (const tableName in database) {
+            for (const columnName in database[tableName].columns) {
+                const fullName = `${tableName}.${columnName}`;
+                const checked = queryState.select.all || queryState.select.columns.has(fullName) ? 'checked' : '';
+                html += `
+                    <div>
+                        <input type="checkbox" id="select-${fullName}" data-action="select-column" data-column="${fullName}" ${checked} ${queryState.select.all ? 'disabled' : ''}>
+                        <label for="select-${fullName}" class="ml-1">${fullName}</label>
+                    </div>`;
+            }
+        }
+        dom.selectContainer.innerHTML = html;
+    }
+
+    function renderFromJoinClause() {
+        const involvedTables = new Set([queryState.from, ...queryState.joins.map(j => j.table)]);
+        const allColumnNames = Array.from(involvedTables).flatMap(t => Object.keys(database[t].columns).map(c => `${t}.${c}`));
+
+        const createOptionsHTML = (options, selectedValue) => {
+            return options.map(o => `<option value="${o}" ${selectedValue === o ? 'selected' : ''}>${o}</option>`).join('');
+        };
+        
+        const tableOptions = createOptionsHTML(Object.keys(database), queryState.from);
+        let html = `<div class="flex items-center gap-2"><span class="font-bold">FROM</span><select data-action="update-from" class="p-1 border rounded styled-select flex-grow dark:bg-gray-900 dark:border-gray-600">${tableOptions}</select></div>`;
+        
+        queryState.joins.forEach(join => {
+            const joinTableOptions = createOptionsHTML(Object.keys(database), join.table);
+            html += `
+                <div class="flex items-center gap-2">
+                    <span class="font-bold">JOIN</span>
+                    <select data-action="update-join-table" data-id="${join.id}" class="p-1 border rounded styled-select flex-grow dark:bg-gray-900 dark:border-gray-600">${joinTableOptions}</select>
+                    <span class="font-bold">ON</span>
+                    <div class="flex-grow grid grid-cols-2 gap-1">
+                        <select data-action="update-join-on" data-id="${join.id}" data-side="left" class="p-1 border rounded styled-select w-full dark:bg-gray-900 dark:border-gray-600">${createOptionsHTML(allColumnNames, join.on.left)}</select>
+                        <select data-action="update-join-on" data-id="${join.id}" data-side="right" class="p-1 border rounded styled-select w-full dark:bg-gray-900 dark:border-gray-600">${createOptionsHTML(allColumnNames, join.on.right)}</select>
+                    </div>
+                    <button data-action="remove-join" data-id="${join.id}" class="bg-red-500 text-white p-1 rounded">×</button>
+                </div>`;
+        });
+        dom.fromJoinContainer.innerHTML = html;
+    }
+
+    function renderWhereClause() {
+        const involvedTables = new Set([queryState.from, ...queryState.joins.map(j => j.table)]);
+        const allColumnNames = Array.from(involvedTables).flatMap(t => Object.keys(database[t].columns).map(c => `${t}.${c}`));
+        const createOptionsHTML = (options, selectedValue) => {
+            return options.map(o => `<option value="${o}" ${selectedValue === o ? 'selected' : ''}>${o}</option>`).join('');
+        };
+
+        let html = '';
+        queryState.where.forEach(cond => {
+             const operatorOptions = ['=','>','<','>=','<='];
+             html += `
+             <div class="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                <select data-action="update-where" data-id="${cond.id}" data-key="column" class="col-span-2 md:col-span-1 p-1 border rounded styled-select w-full dark:bg-gray-900 dark:border-gray-600">${createOptionsHTML(allColumnNames, cond.column)}</select>
+                <select data-action="update-where" data-id="${cond.id}" data-key="operator" class="p-1 border rounded styled-select w-full dark:bg-gray-900 dark:border-gray-600">
+                    ${operatorOptions.map(op => `<option value="${op}" ${cond.operator === op ? 'selected': ''}>${op.replace('<','&lt;')}</option>`).join('')}
+                </select>
+                <input type="text" placeholder="値" data-action="update-where" data-id="${cond.id}" data-key="value" value="${cond.value}" class="col-span-2 md:col-span-1 p-1 border rounded w-full dark:bg-gray-900 dark:border-gray-600">
+                <button data-action="remove-where" data-id="${cond.id}" class="bg-red-500 text-white p-1 rounded">×</button>
+             </div>`;
+        });
+        dom.conditionsContainer.innerHTML = html;
+    }
+
+    function renderSQLPreview() {
+        const { select, from, joins, where } = queryState;
+        const selectClause = `SELECT ${select.all ? '*' : Array.from(select.columns).join(', ')}`;
+        const fromClause = `FROM ${from}`;
+        const joinClauses = joins.map(j => `JOIN ${j.table} ON ${j.on.left || '[col1]'} = ${j.on.right || '[col2]'}`).join(' ');
+        const whereClauses = where.map(w => {
+            let val = w.value;
+            if (val && isNaN(Number(val))) val = `'${val.replace(/'/g, "''")}'`;
+            if (!val) val = `[値]`;
+            return `${w.column || '[col]'} ${w.operator} ${val}`;
+        }).join(' AND ');
+
+        const finalQuery = [selectClause, fromClause, joinClauses, whereClauses ? `WHERE ${whereClauses}` : ''].filter(Boolean).join(' ') + ';';
+        dom.sqlQueryDisplay.textContent = finalQuery;
+    }
+
+    function renderBaseTables() {
+        dom.tableTabs.innerHTML = Object.keys(database).map((t, i) => `<button class="tab-btn ${i===0 ? 'active': ''} whitespace-nowrap py-2 px-3 font-medium text-sm rounded-t-lg border-b-2 border-transparent" data-table="${t}">${database[t].name} (${t})</button>`).join('');
+        dom.baseTablesContainer.innerHTML = Object.keys(database).map((t, i) => {
+            const d = database[t];
+            return `<div class="table-container border rounded-lg ${i===0 ? '' : 'hidden'}" data-table-content="${t}">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-50 dark:bg-gray-700 sticky top-0"><tr>${Object.values(d.columns).map(c => `<th class="px-4 py-2">${c}</th>`).join('')}</tr></thead>
+                    <tbody class="divide-y">${d.data.map(r => `<tr>${Object.keys(d.columns).map(c => `<td class="px-4 py-2">${r[c]}</td>`).join('')}</tr>`).join('')}</tbody>
+                </table></div>`;
+        }).join('');
+    }
+
+    function renderIntermediateJoinTables(joinSteps) {
+        dom.intermediateJoinsContainer.innerHTML = '';
+        if (!joinSteps || joinSteps.length === 0) {
+            return;
+        }
+
+        let html = '';
+        joinSteps.forEach((step, index) => {
+            const headers = step.data.length > 0 ? Object.keys(step.data[0]) : [];
+            html += `
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 transition-all duration-300">
+                    <h2 class="text-2xl font-bold mb-4">途中経過 ${index + 1}: ${step.title}</h2>
+                    <div class="table-container border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-50 dark:bg-gray-700 sticky top-0">
+                                <tr>${headers.map(h => `<th class="px-4 py-2">${h}</th>`).join('')}</tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                ${step.data.map(row => `<tr>${headers.map(h => `<td class="px-4 py-2">${row[h] === undefined ? '' : row[h]}</td>`).join('')}</tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+        dom.intermediateJoinsContainer.innerHTML = html;
+    }
+    
+    // --- 3. EVENT HANDLERS & STATE UPDATES ---
+
+    function handleInteraction(event) {
+        const target = event.target;
+        const action = target.dataset.action;
+        if (!action) return;
+
+        if (event.type === 'click' && target.tagName !== 'BUTTON') {
+            return;
+        }
+
+        const id = target.dataset.id ? parseInt(target.dataset.id) : null;
+
+        if (action === 'select-all') {
+            queryState.select.all = target.checked;
+        }
+        if (action === 'select-column') {
+            const col = target.dataset.column;
+            if (target.checked) queryState.select.columns.add(col);
+            else queryState.select.columns.delete(col);
+        }
+        if (action === 'update-from') {
+            queryState.from = target.value;
+        }
+        if (action === 'add-join') {
+            queryState.joins.push({ id: Date.now(), table: '会社', on: { left: '', right: '' } });
+        }
+        if (action === 'remove-join') {
+            queryState.joins = queryState.joins.filter(j => j.id !== id);
+        }
+        if (action === 'update-join-table') {
+            const join = queryState.joins.find(j => j.id === id);
+            if (join) join.table = target.value;
+        }
+        if (action === 'update-join-on') {
+            const join = queryState.joins.find(j => j.id === id);
+            if (join) join.on[target.dataset.side] = target.value;
+        }
+        if (action === 'add-where') {
+            queryState.where.push({ id: Date.now(), column: '', operator: '=', value: '' });
+        }
+        if (action === 'remove-where') {
+            queryState.where = queryState.where.filter(w => w.id !== id);
+        }
+        if (action === 'update-where') {
+            const cond = queryState.where.find(w => w.id === id);
+            if(cond) cond[target.dataset.key] = target.value;
+        }
+        
+        if (event.type === 'input') {
+            renderSQLPreview();
+            return;
+        }
+        
+        const structuralActions = [
+            'update-from',
+            'add-join',
+            'remove-join',
+            'update-join-table',
+            'add-where',
+            'remove-where'
+        ];
+        
+        if (structuralActions.includes(action)) {
+            renderAll();
+        } else if (action === 'select-all') {
+            renderSelectClause();
+            renderSQLPreview();
+        } else {
+            renderSQLPreview();
+        }
+    }
+
+    // --- 4. CORE LOGIC (Query Execution & Mission Check) ---
+
+    function processJoinsStepByStep(state) {
+        if (!state.joins || state.joins.length === 0) return [];
+
+        const steps = [];
+        let currentData = database[state.from].data.map(row => { 
+            const p = {}; 
+            for(const k in row) p[`${state.from}.${k}`] = row[k]; 
+            return p; 
+        });
+
+        for (const join of state.joins) {
+            const joinData = database[join.table].data;
+            const nextData = [];
+
+            currentData.forEach(row1 => {
+                joinData.forEach(row2 => {
+                    const val1 = row1[join.on.left];
+                    const [t2, c2] = join.on.right.split('.');
+                    const val2 = join.table === t2 ? row2[c2] : row1[join.on.right];
+                    if (val1 != null && val1 == val2) {
+                        const merged = {...row1};
+                        for (const k in row2) merged[`${join.table}.${k}`] = row2[k];
+                        nextData.push(merged);
+                    }
+                });
+            });
+
+            steps.push({
+                title: `JOIN ${join.table} ON ${join.on.left} = ${join.on.right}`,
+                data: JSON.parse(JSON.stringify(nextData))
+            });
+            currentData = nextData;
+        }
+        return steps;
+    }
+
+
+    function executeQuery(state, joinSteps) {
+        let data = (joinSteps && joinSteps.length > 0) 
+            ? JSON.parse(JSON.stringify(joinSteps[joinSteps.length - 1].data))
+            : database[state.from].data.map(row => {
+                const p = {};
+                for(const k in row) p[`${state.from}.${k}`] = row[k];
+                return p;
+            });
+
+        data = data.filter(row => state.where.every(cond => {
+            let rowVal = row[cond.column], condVal = cond.value;
+            if (rowVal != null && !isNaN(Number(rowVal))) { rowVal = Number(rowVal); condVal = Number(condVal); }
+            switch (cond.operator) {
+                case '=': return rowVal == condVal; case '>': return rowVal > condVal;
+                case '<': return rowVal < condVal; case '>=': return rowVal >= condVal;
+                case '<=': return rowVal <= condVal; default: return false;
+            }
+        }));
+        
+        if (!state.select.all) {
+            data = data.map(row => {
+                const projected = {};
+                state.select.columns.forEach(col => {
+                    if (row.hasOwnProperty(col)) {
+                       projected[col] = row[col];
+                    }
+                });
+                return projected;
+            });
+        }
+        return data;
+    }
+
+    function checkMission(userResult) {
+        const correctResult = executeQuery(missions[currentMissionIndex].setup, processJoinsStepByStep(missions[currentMissionIndex].setup));
+        
+        const canonicalize = arr => arr.map(row => JSON.stringify(Object.keys(row).sort().reduce((obj, key) => { obj[key] = row[key]; return obj; }, {}))).sort().join(';');
+        
+        dom.resultContainer.classList.remove('feedback-correct', 'feedback-incorrect');
+        void dom.resultContainer.offsetWidth; 
+
+        if (canonicalize(userResult) === canonicalize(correctResult)) {
+            dom.feedbackMessage.textContent = '正解！　次のミッションもやってみよう！';
+            dom.feedbackMessage.className = 'text-center p-4 rounded-lg mb-4 font-semibold text-lg bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300';
+            dom.resultContainer.classList.add('feedback-correct');
+            
+            if (!surrendered) {
+                score += 20;
+            }
+            dom.score.textContent = score;
+
+            setTimeout(() => {
+                currentMissionIndex = (currentMissionIndex + 1);
+                if (currentMissionIndex >= missions.length) {
+                     dom.missionText.textContent = `全ミッションクリア！最終スコア: ${score}`;
+                     dom.missionCounter.textContent = `(${missions.length}/${missions.length})`;
+                     dom.queryBuilderContainer.style.display = 'none';
+                     dom.executeButton.disabled = true;
+                     dom.executeButton.textContent = '完了';
+                     dom.feedbackMessage.textContent = 'おめでとうございます！ページを更新してもう一度挑戦できます。';
+                     dom.surrenderButton.disabled = true;
+                } else {
+                    setupMission();
+                }
+            }, 2000);
+        } else {
+            dom.feedbackMessage.textContent = '不正解。結果が違うようです。もう一度試してみよう。';
+            dom.feedbackMessage.className = 'text-center p-4 rounded-lg mb-4 font-semibold text-lg bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300';
+            dom.resultContainer.classList.add('feedback-incorrect');
+        }
+    }
+
+    // --- 5. INITIALIZATION ---
+
+    function resetToDefaultState() {
+        return {
+            select: { all: true, columns: new Set() },
+            from: '商品',
+            joins: [],
+            where: []
+        };
+    }
+
+    function setupMission() {
+        if (currentMissionIndex >= missions.length) {
+             console.error("Attempted to set up a mission that does not exist.");
+             return;
+        }
+        const mission = missions[currentMissionIndex];
+        dom.missionText.textContent = mission.text;
+        dom.missionCounter.textContent = `(${currentMissionIndex + 1}/${missions.length})`;
+        surrendered = false;
+        queryState = resetToDefaultState();
+        renderAll();
+    }
+    
+    function switchMode(newMode) {
+        currentMode = newMode;
+        dom.modeProblem.classList.toggle('active', newMode === 'problem');
+        dom.modeFree.classList.toggle('active', newMode === 'free');
+        dom.problemModeUI.classList.toggle('hidden', newMode !== 'problem');
+        
+        dom.feedbackMessage.textContent = 'SQL文を組み立てて「実行」ボタンを押そう！';
+        dom.feedbackMessage.className = 'text-center p-4 rounded-lg mb-4 font-semibold text-lg';
+        dom.executedSqlContainer.classList.add('hidden');
+        dom.intermediateJoinsContainer.innerHTML = '';
+        dom.resultTableHead.innerHTML = '';
+        dom.resultTableBody.innerHTML = '';
+        
+        if (newMode === 'problem') {
+            if (currentMissionIndex >= missions.length) {
+                currentMissionIndex = 0;
+                score = 0;
+                dom.score.textContent = score;
+                dom.queryBuilderContainer.style.display = 'block';
+                dom.executeButton.disabled = false;
+                dom.executeButton.textContent = '実行';
+                dom.surrenderButton.disabled = false;
+            }
+            setupMission();
+        } else { // free mode
+            queryState = resetToDefaultState();
+            renderAll();
+        }
+    }
+
+    function init() {
+        dom.queryBuilderContainer.addEventListener('change', handleInteraction);
+        dom.queryBuilderContainer.addEventListener('input', handleInteraction);
+        dom.queryBuilderContainer.addEventListener('click', handleInteraction);
+        
+        dom.executeButton.addEventListener('click', () => {
+             dom.feedbackMessage.textContent = 'SQL文を組み立てて「実行」ボタンを押そう！';
+             dom.feedbackMessage.className = 'text-center p-4 rounded-lg mb-4 font-semibold text-lg';
+
+            const executedQuery = dom.sqlQueryDisplay.textContent;
+            dom.executedSqlDisplay.textContent = executedQuery;
+            dom.executedSqlContainer.classList.remove('hidden');
+            
+            const joinSteps = processJoinsStepByStep(queryState);
+            renderIntermediateJoinTables(joinSteps);
+
+             const finalResult = executeQuery(queryState, joinSteps);
+             const headers = finalResult.length > 0 ? Object.keys(finalResult[0]) : [];
+             dom.resultTableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-4 py-2">${h}</th>`).join('')}</tr>`;
+             dom.resultTableBody.innerHTML = finalResult.length > 0 ? finalResult.map(row => `<tr>${headers.map(h => `<td class="px-4 py-2">${row[h] === undefined ? '' : row[h]}</td>`).join('')}</tr>`).join('') : '<tr><td class="p-4 text-center text-gray-500">データがありません</td></tr>';
+             
+             if(currentMode === 'problem') {
+                checkMission(finalResult);
+             }
+        });
+
+        dom.tableTabs.addEventListener('click', e => {
+            if (e.target.classList.contains('tab-btn')) {
+                dom.tableTabs.querySelector('.active').classList.remove('active');
+                e.target.classList.add('active');
+                dom.baseTablesContainer.querySelectorAll('[data-table-content]').forEach(el => el.classList.add('hidden'));
+                dom.baseTablesContainer.querySelector(`[data-table-content="${e.target.dataset.table}"]`).classList.remove('hidden');
+            }
+        });
+
+        dom.surrenderButton.addEventListener('click', () => {
+            if (currentMissionIndex >= missions.length) return;
+            surrendered = true;
+            const correctSetup = missions[currentMissionIndex].setup;
+            queryState = {
+                select: {
+                    all: correctSetup.select.all,
+                    columns: new Set(correctSetup.select.columns)
+                },
+                from: correctSetup.from,
+                joins: JSON.parse(JSON.stringify(correctSetup.joins)),
+                where: JSON.parse(JSON.stringify(correctSetup.where))
+            };
+            renderAll();
+        });
+
+        dom.modeProblem.addEventListener('click', () => switchMode('problem'));
+        dom.modeFree.addEventListener('click', () => switchMode('free'));
+        
+        renderBaseTables();
+        switchMode('problem'); // Start in problem mode
+    }
+
+    init();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RGBカラー作成ツール</title>
+  <style>
+    :root {
+      --bg-color: #fdf5e6;
+      --border-color: #d2b48c;
+      --box-bg: #f5f5dc;
+    }
+    body {
+      font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+      max-width: 650px;
+      margin: 20px auto;
+      padding: 20px;
+      line-height: 1.6;
+      background-color: #fff;
+      color: #333;
+    }
+    h2, h3 {
+      border-left: 5px solid #8b4513;
+      padding-left: 10px;
+      margin-top: 30px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+    td, th {
+      border: 1px solid #aaa;
+      padding: 10px;
+      text-align: center;
+    }
+    th {
+      background-color: #eee;
+    }
+    .slider {
+      width: 100%;
+      cursor: pointer;
+    }
+    .color-display {
+      height: 60px;
+      margin: 10px 0;
+      border: 1px solid #333;
+      border-radius: 4px;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .color-code-wrapper {
+      background-color: var(--box-bg);
+      border: 1px solid var(--border-color);
+      padding: 15px;
+      text-align: left;
+      font-family: monospace;
+      font-size: 1.2em;
+      margin-bottom: 20px;
+    }
+    .hex-highlight {
+      font-weight: bold;
+      font-size: 1.4em;
+    }
+    .mini-box {
+      width: 40px;
+      height: 25px;
+      display: inline-block;
+      vertical-align: middle;
+      border: 1px solid #888;
+      border-radius: 2px;
+    }
+    input[type="number"] {
+      width: 50px;
+      padding: 5px;
+      font-size: 1rem;
+    }
+
+    /* 解説セクションのスタイル */
+    .explanation-section {
+      background-color: var(--bg-color);
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 40px;
+      font-size: 0.95rem;
+    }
+    .explanation-box {
+      background-color: #fffaf0;
+      border: 1px solid #decba4;
+      padding: 15px;
+      margin: 10px 0;
+    }
+    .text-red { color: #d00; font-weight: bold; }
+    .text-green { color: #080; font-weight: bold; }
+    .text-blue { color: #00d; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h2>RGBカラー作成ツール</h2>
+  
+  <table>
+    <tr>
+      <th>RGB<br>（光の3原色）</th>
+      <th>数値<br>（0～255）</th>
+      <th>操作バー</th>
+      <th>色表示</th>
+    </tr>
+    <tr>
+      <td style="color:red; font-weight:bold;">R (赤)</td>
+      <td><input type="number" id="rVal" value="58" min="0" max="255" oninput="updateFromInput('r')"></td>
+      <td><input type="range" id="rSlider" class="slider" min="0" max="255" value="58" oninput="updateColor()"></td>
+      <td><div id="rBox" class="mini-box"></div></td>
+    </tr>
+    <tr>
+      <td style="color:green; font-weight:bold;">G (緑)</td>
+      <td><input type="number" id="gVal" value="207" min="0" max="255" oninput="updateFromInput('g')"></td>
+      <td><input type="range" id="gSlider" class="slider" min="0" max="255" value="207" oninput="updateColor()"></td>
+      <td><div id="gBox" class="mini-box"></div></td>
+    </tr>
+    <tr>
+      <td style="color:blue; font-weight:bold;">B (青)</td>
+      <td><input type="number" id="bVal" value="87" min="0" max="255" oninput="updateFromInput('b')"></td>
+      <td><input type="range" id="bSlider" class="slider" min="0" max="255" value="87" oninput="updateColor()"></td>
+      <td><div id="bBox" class="mini-box"></div></td>
+    </tr>
+  </table>
+
+  <h3>作成した色</h3>
+  <div id="colorDisplay" class="color-display"></div>
+
+  <h3>カラーコード</h3>
+  <div class="color-code-wrapper">
+    <span id="hexDisplay" class="hex-highlight">#3ACF57</span>
+  </div>
+
+  <!-- 画像の内容を基にした解説セクション -->
+  <div class="explanation-section">
+    <p>ホームページやブログの作成時に使用するHTMLやCSSでは色を指定する場合に、#（ハッシュマーク）から始まる6桁の16進数で色を表現する方法が用いられます。</p>
+    
+    <div class="explanation-box">
+      <span id="expHex" class="hex-highlight">
+        #<span class="text-red" id="expR_hex">3A</span><span class="text-green" id="expG_hex">CF</span><span class="text-blue" id="expB_hex">57</span>
+      </span>
+    </div>
+
+    <p>これは色を赤・緑・青の3色で表すRGB形式の各パラメータを2桁の16進数に変換して連結したものです。<br>
+    上記のカラーコードの場合、<span class="text-red" id="expR_hex2">3A</span>が赤色、<span class="text-green" id="expG_hex2">CF</span>が緑色、<span class="text-blue" id="expB_hex2">57</span>が青色を表しています。<br>
+    あとはパラメータを16進数から10進数に変換することでカラーコードをRGBに変換することができます。</p>
+
+    <div class="explanation-box">
+      <span class="text-red" id="expR_hex3">3A</span>(16進数) = <span id="expR_dec">58</span>(10進数)<br>
+      <span class="text-green" id="expG_hex3">CF</span>(16進数) = <span id="expG_dec">207</span>(10進数)<br>
+      <span class="text-blue" id="expB_hex3">57</span>(16進数) = <span id="expB_dec">87</span>(10進数)<br>
+      <br>
+      よって<br>
+      <span id="expFullHex">#3ACF57</span> = <span id="expFullRgb">rgb(58, 207, 87)</span>
+    </div>
+
+    <p>なお、16進数と10進数の変換は上記のツールで直感的に確認できます。</p>
+  </div>
+
+  <script>
+    function updateColor() {
+      const r = parseInt(document.getElementById("rSlider").value) || 0;
+      const g = parseInt(document.getElementById("gSlider").value) || 0;
+      const b = parseInt(document.getElementById("bSlider").value) || 0;
+
+      // 数値入力欄を更新
+      document.getElementById("rVal").value = r;
+      document.getElementById("gVal").value = g;
+      document.getElementById("bVal").value = b;
+
+      // 各色のミニボックス更新
+      document.getElementById("rBox").style.backgroundColor = `rgb(${r}, 0, 0)`;
+      document.getElementById("gBox").style.backgroundColor = `rgb(0, ${g}, 0)`;
+      document.getElementById("bBox").style.backgroundColor = `rgb(0, 0, ${b})`;
+
+      // メイン表示の更新
+      const rgbText = `rgb(${r}, ${g}, ${b})`;
+      document.getElementById("colorDisplay").style.backgroundColor = rgbText;
+
+      // 16進数変換
+      const rHex = r.toString(16).padStart(2, '0').toUpperCase();
+      const gHex = g.toString(16).padStart(2, '0').toUpperCase();
+      const bHex = b.toString(16).padStart(2, '0').toUpperCase();
+      const fullHex = `#${rHex}${gHex}${bHex}`;
+
+      // カラーコード表示更新
+      document.getElementById("hexDisplay").innerText = fullHex;
+
+      // --- 解説セクションのリアルタイム更新 ---
+      // 16進数文字の更新
+      document.getElementById("expR_hex").innerText = rHex;
+      document.getElementById("expG_hex").innerText = gHex;
+      document.getElementById("expB_hex").innerText = bHex;
+      
+      document.getElementById("expR_hex2").innerText = rHex;
+      document.getElementById("expG_hex2").innerText = gHex;
+      document.getElementById("expB_hex2").innerText = bHex;
+      
+      document.getElementById("expR_hex3").innerText = rHex;
+      document.getElementById("expG_hex3").innerText = gHex;
+      document.getElementById("expB_hex3").innerText = bHex;
+
+      // 10進数数値の更新
+      document.getElementById("expR_dec").innerText = r;
+      document.getElementById("expG_dec").innerText = g;
+      document.getElementById("expB_dec").innerText = b;
+
+      // 最終まとめの更新
+      document.getElementById("expFullHex").innerText = fullHex;
+      document.getElementById("expFullRgb").innerText = rgbText;
+    }
+
+    function updateFromInput(color) {
+      let val = parseInt(document.getElementById(color + "Val").value);
+      if (isNaN(val)) val = 0;
+      if (val > 255) val = 255;
+      if (val < 0) val = 0;
+      
+      document.getElementById(color + "Slider").value = val;
+      updateColor();
+    }
+
+    // 初期実行
+    window.onload = updateColor;
+  </script>
+
+</body>
+</html>

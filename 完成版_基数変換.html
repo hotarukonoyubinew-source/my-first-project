@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>基数変換トレーニング</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --surface-color: #ffffff;
+            --text-main: #334155;
+            --text-sub: #64748b;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --border-color: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            user-select: none;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* 共通コンテナ */
+        .container {
+            background: var(--surface-color);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 480px;
+            padding: 30px 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+        .container.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        h1 {
+            color: var(--text-main);
+            margin-bottom: 24px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* スタート画面用設定項目 */
+        .form-group {
+            margin-bottom: 24px;
+            width: 100%;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-main);
+            font-weight: bold;
+            font-size: 14px;
+        }
+        select, input[type="range"] {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            background: var(--bg-color);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            font-size: 16px;
+            outline: none;
+        }
+        select:focus {
+            border-color: var(--primary);
+        }
+        .range-val {
+            text-align: center;
+            font-size: 18px;
+            color: var(--primary);
+            font-weight: bold;
+            margin-top: 12px;
+        }
+        
+        /* 共通ボタン */
+        .btn {
+            padding: 14px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            width: 100%;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            margin-top: 10px;
+        }
+        .btn-primary:active {
+            background: var(--primary-hover);
+            transform: scale(0.98);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-sub);
+            border: 2px solid var(--border-color);
+            margin-top: 15px;
+        }
+        .btn-secondary:active {
+            background: var(--border-color);
+            transform: scale(0.98);
+        }
+
+        /* プレイ画面ヘッダ */
+        .play-header {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 24px;
+            font-size: 16px;
+            color: var(--text-sub);
+            border-bottom: 2px solid var(--bg-color);
+            padding-bottom: 12px;
+            font-weight: bold;
+        }
+        
+        /* 問題表示部 */
+        .question-box {
+            text-align: center;
+            margin-bottom: 30px;
+            width: 100%;
+            background: var(--bg-color);
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .question-text {
+            font-size: 16px;
+            color: var(--text-sub);
+            margin-bottom: 12px;
+        }
+        .target-value {
+            font-size: 42px;
+            font-weight: bold;
+            color: var(--text-main);
+            letter-spacing: 1px;
+        }
+
+        /* --- 入力UI --- */
+        /* ビットスイッチ (2進数入力用) */
+        .bit-container {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        .bit-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .bit-weight {
+            font-size: 12px;
+            color: var(--text-sub);
+            margin-bottom: 6px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-weight: bold;
+        }
+        .bit-switch {
+            width: 45px;
+            height: 60px;
+            border-radius: 8px;
+            font-size: 24px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-sub);
+        }
+        .bit-switch.on {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* 桁ごと入力 (ダイヤル式) */
+        .digit-container {
+            display: none;
+            gap: 12px;
+            justify-content: center;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .digit-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: var(--surface-color);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .digit-btn {
+            background: var(--bg-color);
+            border: none;
+            width: 60px;
+            height: 40px;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-sub);
+            transition: background-color 0.1s;
+        }
+        .digit-btn:active {
+            background: var(--border-color);
+        }
+        .digit-value {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: var(--text-main);
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* フィードバック＆ヒント */
+        .feedback {
+            height: 24px;
+            font-weight: bold;
+            margin: 15px 0;
+            font-size: 18px;
+            text-align: center;
+            width: 100%;
+        }
+        .feedback.correct { color: var(--success); }
+        .feedback.wrong { color: var(--danger); }
+        
+        .hint-btn {
+            background: none;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            display: none;
+            margin-top: 15px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .hint-btn:active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        /* 統計情報 */
+        .stats-box {
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 24px;
+            font-size: 14px;
+            text-align: center;
+            width: 100%;
+            color: var(--text-sub);
+        }
+        .stats-box strong {
+            color: var(--text-main);
+        }
+
+        /* リザルト画面 */
+        #result-score {
+            font-size: 48px;
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+        #result-msg {
+            margin-bottom: 30px;
+            font-size: 16px;
+            color: var(--text-main);
+            text-align: center;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- スタート画面 -->
+    <div id="start-screen" class="container active">
+        <h1>基数変換トレーニング</h1>
+        
+        <div class="form-group">
+            <label>出題パターン</label>
+            <select id="conversion-type">
+                <option value="all">すべてランダム</option>
+                <option value="dec2bin">10進数 → 2進数</option>
+                <option value="bin2dec">2進数 → 10進数</option>
+                <option value="hex2bin">16進数 → 2進数</option>
+                <option value="bin2hex">2進数 → 16進数</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>難易度 (ビット数)</label>
+            <select id="mode-select">
+                <option value="4">4ビットモード (最大10進数: 15)</option>
+                <option value="8">8ビットモード (最大10進数: 255)</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>出題数</label>
+            <input type="range" id="question-count" min="1" max="10" value="5">
+            <div class="range-val" id="count-val">5 問</div>
+        </div>
+
+        <button class="btn btn-primary" onclick="startGame()">スタート</button>
+
+        <div class="stats-box">
+            学習記録<br>
+            正解数: <strong id="total-correct">0</strong> / プレイ回数: <strong id="total-plays">0</strong>
+        </div>
+    </div>
+
+    <!-- プレイ画面 -->
+    <div id="play-screen" class="container">
+        <div class="play-header">
+            <span id="progress-text">問題 1/5</span>
+            <span id="score-text">スコア: 0</span>
+        </div>
+
+        <div class="question-box">
+            <div class="question-text" id="q-instruction">10進数を 2進数 に変換してください</div>
+            <div class="target-value" id="q-target">150</div>
+        </div>
+
+        <!-- 2進数入力用 (トグルスイッチ) -->
+        <div id="input-binary" class="bit-container">
+            <!-- JSで生成 -->
+        </div>
+
+        <!-- 10/16進数入力用 (桁ごとの入力) -->
+        <div id="input-digits" class="digit-container">
+            <!-- JSで生成 -->
+        </div>
+
+        <div class="feedback" id="feedback-msg"></div>
+        
+        <button id="submit-btn" class="btn btn-primary" onclick="checkAnswer()">判定する</button>
+        <button id="hint-btn" class="hint-btn" onclick="showHint()">ヒントを見る</button>
+        <button id="stop-btn" class="btn btn-secondary" onclick="stopGame()">途中でやめる</button>
+    </div>
+
+    <!-- リザルト画面 -->
+    <div id="result-screen" class="container">
+        <h1>学習完了！</h1>
+        <div id="result-score">5 / 5</div>
+        <div id="result-msg"></div>
+        <button class="btn btn-primary" onclick="returnToStart()">トップに戻る</button>
+    </div>
+
+<script>
+    // --- 状態管理 ---
+    const state = {
+        mode: 4, // 4 or 8
+        totalQ: 5,
+        currentQ: 0,
+        score: 0,
+        mistakes: 0,
+        questions: [],
+        conversionType: "all",
+        currentBits: [], // ビット入力用 [0,1,0,1...]
+        currentDigits: [], // 10/16進数入力用 (文字の配列)
+        digitChars: [] // 現在の桁の選択可能文字配列
+    };
+
+    // --- ロード時の処理 ---
+    document.getElementById('question-count').addEventListener('input', (e) => {
+        document.getElementById('count-val').innerText = `${e.target.value} 問`;
+    });
+    loadStats();
+
+    // --- 画面遷移 ---
+    function showScreen(id) {
+        document.querySelectorAll('.container').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    // --- ゲーム初期化 ---
+    function startGame() {
+        state.mode = parseInt(document.getElementById('mode-select').value);
+        state.totalQ = parseInt(document.getElementById('question-count').value);
+        state.conversionType = document.getElementById('conversion-type').value;
+        state.currentQ = 0;
+        state.score = 0;
+        state.questions = generateQuestions(state.totalQ, state.mode, state.conversionType);
+        
+        // 記録の更新
+        let plays = parseInt(localStorage.getItem('cc_plays') || '0');
+        localStorage.setItem('cc_plays', plays + 1);
+
+        showScreen('play-screen');
+        renderQuestion();
+    }
+
+    // --- 問題生成 ---
+    function generateQuestions(count, bitCount, convType) {
+        const qList = [];
+        const maxVal = bitCount === 4 ? 15 : 255;
+        const allTypes = [
+            { id: 'dec2bin', from: 'dec', to: 'bin', desc: '10進数を「2進数」に変換してください' },
+            { id: 'hex2bin', from: 'hex', to: 'bin', desc: '16進数を「2進数」に変換してください' },
+            { id: 'bin2dec', from: 'bin', to: 'dec', desc: '2進数を「10進数」に変換してください' },
+            { id: 'bin2hex', from: 'bin', to: 'hex', desc: '2進数を「16進数」に変換してください' }
+        ];
+
+        let availableTypes = allTypes;
+        if (convType !== 'all') {
+            availableTypes = allTypes.filter(t => t.id === convType);
+        }
+
+        for (let i = 0; i < count; i++) {
+            const val = Math.floor(Math.random() * (maxVal + 1));
+            // 基数ごとの文字列表現
+            const representations = {
+                'dec': val.toString(10),
+                'hex': val.toString(16).toUpperCase(),
+                'bin': val.toString(2).padStart(bitCount, '0')
+            };
+            
+            // 8ビット時は16進数を2桁にパディング
+            if (bitCount === 8 && representations['hex'].length === 1) {
+                representations['hex'] = '0' + representations['hex'];
+            }
+
+            const type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+            
+            qList.push({
+                desc: type.desc,
+                targetStr: representations[type.from],
+                answerStr: representations[type.to],
+                inputType: type.to // 'bin', 'dec', 'hex'
+            });
+        }
+        return qList;
+    }
+
+    // --- UIの構築と描画 ---
+    function renderQuestion() {
+        state.mistakes = 0;
+        document.getElementById('feedback-msg').innerText = "";
+        document.getElementById('feedback-msg').className = "feedback";
+        document.getElementById('hint-btn').style.display = "none";
+        document.getElementById('play-screen').style.animation = 'none';
+        
+        const q = state.questions[state.currentQ];
+        document.getElementById('progress-text').innerText = `問題 ${state.currentQ + 1} / ${state.totalQ}`;
+        document.getElementById('score-text').innerText = `スコア: ${state.score}`;
+        document.getElementById('q-instruction').innerText = q.desc;
+        
+        // ターゲット値の表示（基数を示す添字を表現）
+        let baseStr = q.desc.includes('10進数') && !q.desc.includes('「10進数」') ? '(10)' : 
+                      q.desc.includes('16進数') && !q.desc.includes('「16進数」') ? '(16)' : '(2)';
+        document.getElementById('q-target').innerText = `${q.targetStr} ${baseStr}`;
+
+        // 入力UIの切り替え
+        const binUi = document.getElementById('input-binary');
+        const digitUi = document.getElementById('input-digits');
+        
+        if (q.inputType === 'bin') {
+            binUi.style.display = "flex";
+            digitUi.style.display = "none";
+            initBitSwitches();
+        } else {
+            binUi.style.display = "none";
+            digitUi.style.display = "flex";
+            initDigits(q.inputType);
+        }
+    }
+
+    // 2進数スイッチの初期化
+    function initBitSwitches() {
+        const container = document.getElementById('input-binary');
+        container.innerHTML = '';
+        state.currentBits = new Array(state.mode).fill(0);
+        
+        for (let i = 0; i < state.mode; i++) {
+            const weight = Math.pow(2, state.mode - 1 - i); // 左から 128, 64... or 8, 4...
+            const group = document.createElement('div');
+            group.className = 'bit-group';
+            
+            const wLabel = document.createElement('div');
+            wLabel.className = 'bit-weight';
+            wLabel.innerText = weight;
+            
+            const btn = document.createElement('div');
+            btn.className = 'bit-switch';
+            btn.innerText = '0';
+            btn.onclick = () => {
+                state.currentBits[i] = state.currentBits[i] === 0 ? 1 : 0;
+                btn.innerText = state.currentBits[i];
+                btn.classList.toggle('on');
+            };
+            
+            group.appendChild(wLabel);
+            group.appendChild(btn);
+            container.appendChild(group);
+        }
+    }
+
+    // 10/16進数ダイヤル(桁ごと)の初期化
+    function initDigits(type) {
+        const container = document.getElementById('input-digits');
+        container.innerHTML = '';
+        state.currentDigits = [];
+        
+        let numDigits = 1;
+        if (type === 'dec') {
+            numDigits = state.mode === 4 ? 2 : 3; // 4ビットなら最大15(2桁)、8ビットなら最大255(3桁)
+            state.digitChars = ['0','1','2','3','4','5','6','7','8','9'];
+        } else if (type === 'hex') {
+            numDigits = state.mode === 4 ? 1 : 2; // 4ビットなら最大F(1桁)、8ビットなら最大FF(2桁)
+            state.digitChars = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'];
+        }
+
+        for (let i = 0; i < numDigits; i++) {
+            state.currentDigits.push('0'); // 初期値はすべて'0'
+            
+            const group = document.createElement('div');
+            group.className = 'digit-group';
+            
+            const upBtn = document.createElement('button');
+            upBtn.className = 'digit-btn';
+            upBtn.innerText = '▲';
+            upBtn.onclick = () => changeDigit(i, 1);
+            
+            const valDisplay = document.createElement('div');
+            valDisplay.className = 'digit-value';
+            valDisplay.id = `digit-val-${i}`;
+            valDisplay.innerText = '0';
+            
+            const downBtn = document.createElement('button');
+            downBtn.className = 'digit-btn';
+            downBtn.innerText = '▼';
+            downBtn.onclick = () => changeDigit(i, -1);
+            
+            group.appendChild(upBtn);
+            group.appendChild(valDisplay);
+            group.appendChild(downBtn);
+            container.appendChild(group);
+        }
+    }
+
+    function changeDigit(index, delta) {
+        const chars = state.digitChars;
+        const currentVal = state.currentDigits[index];
+        let charIndex = chars.indexOf(currentVal);
+        
+        charIndex += delta;
+        if (charIndex < 0) charIndex = chars.length - 1;
+        if (charIndex >= chars.length) charIndex = 0;
+        
+        const newVal = chars[charIndex];
+        state.currentDigits[index] = newVal;
+        document.getElementById(`digit-val-${index}`).innerText = newVal;
+        
+        // 操作時にエラーメッセージを消す
+        document.getElementById('feedback-msg').innerText = "";
+    }
+
+    // --- 判定ロジック ---
+    function checkAnswer() {
+        const q = state.questions[state.currentQ];
+        let userAnswer = "";
+
+        if (q.inputType === 'bin') {
+            userAnswer = state.currentBits.join('');
+        } else {
+            userAnswer = state.currentDigits.join('');
+        }
+
+        let isCorrect = false;
+        if (q.inputType === 'bin') {
+            isCorrect = userAnswer === q.answerStr;
+        } else if (q.inputType === 'dec') {
+            // 先頭の0(例: 015)を無視して比較するために数値化する
+            isCorrect = parseInt(userAnswer, 10) === parseInt(q.answerStr, 10);
+        } else if (q.inputType === 'hex') {
+            isCorrect = parseInt(userAnswer, 16) === parseInt(q.answerStr, 16);
+        }
+
+        const feedback = document.getElementById('feedback-msg');
+        if (isCorrect) {
+            feedback.innerText = "正解！";
+            feedback.className = "feedback correct";
+            state.score++;
+            
+            // 累計正解数の記録
+            let totalCorrect = parseInt(localStorage.getItem('cc_correct') || '0');
+            localStorage.setItem('cc_correct', totalCorrect + 1);
+
+            // ボタンを一時的に無効化
+            document.getElementById('submit-btn').disabled = true;
+            setTimeout(() => {
+                document.getElementById('submit-btn').disabled = false;
+                nextQuestion();
+            }, 1000);
+        } else {
+            feedback.innerText = "不正解...";
+            feedback.className = "feedback wrong";
+            state.mistakes++;
+            
+            // 画面を揺らすエフェクト
+            const playScreen = document.getElementById('play-screen');
+            playScreen.style.animation = 'none';
+            void playScreen.offsetWidth; // リフロー強制
+            playScreen.style.animation = 'shake 0.4s';
+
+            if (state.mistakes >= 2) {
+                document.getElementById('hint-btn').style.display = "inline-block";
+            }
+        }
+    }
+
+    // --- 次の問題・リザルト ---
+    function nextQuestion() {
+        state.currentQ++;
+        if (state.currentQ >= state.totalQ) {
+            showResult();
+        } else {
+            renderQuestion();
+        }
+    }
+
+    function showResult() {
+        showScreen('result-screen');
+        document.getElementById('result-score').innerText = `${state.score} / ${state.totalQ}`;
+        
+        let msg = "";
+        const rate = state.score / state.totalQ;
+        if (rate === 1) msg = "全問正解です！\n基数変換の基本はバッチリですね。";
+        else if (rate >= 0.7) msg = "よくできました！\nあと少しで完璧です。";
+        else if (rate >= 0.4) msg = "基礎は理解できています。\n繰り返し練習してマスターしましょう。";
+        else msg = "ヒントを活用しながら、\nゆっくり計算の仕組みを理解していきましょう！";
+        
+        document.getElementById('result-msg').innerText = msg;
+        loadStats(); // 記録を更新表示
+    }
+
+    function returnToStart() {
+        showScreen('start-screen');
+    }
+
+    // --- 途中でやめる機能 ---
+    function stopGame() {
+        returnToStart();
+    }
+
+    // --- ヒント機能 ---
+    function showHint() {
+        const q = state.questions[state.currentQ];
+        const feedback = document.getElementById('feedback-msg');
+        feedback.className = "feedback";
+        
+        if (q.inputType === 'bin') {
+            document.querySelectorAll('.bit-weight').forEach(el => el.style.opacity = 1);
+            feedback.innerText = "ヒント: 各桁の数値(重み)を足して目標値にしよう";
+        } else if (q.inputType === 'dec') {
+            feedback.innerText = "ヒント: 2進数の「1」がある場所の重み(1, 2, 4, 8...)を足し算します";
+        } else if (q.inputType === 'hex') {
+            feedback.innerText = "ヒント: 2進数を4桁ずつに分けて、それぞれを16進数(0〜F)に変換します";
+        }
+    }
+
+    // --- 記録の読み込み ---
+    function loadStats() {
+        const plays = localStorage.getItem('cc_plays') || '0';
+        const correct = localStorage.getItem('cc_correct') || '0';
+        document.getElementById('total-plays').innerText = plays;
+        document.getElementById('total-correct').innerText = correct;
+    }
+
+</script>
+</body>
+</html>
