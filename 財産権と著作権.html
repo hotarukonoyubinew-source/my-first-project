@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>情報I: 知的財産権マスター</title>
+    <style>
+        :root {
+            --primary: #4A90E2;
+            --primary-hover: #357ABD;
+            --success: #4CAF50;
+            --danger: #E74C3C;
+            --background: #F0F4F8;
+            --text-main: #333;
+            --card-bg: #FFFFFF;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: var(--background);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #app {
+            background: var(--card-bg);
+            width: 90%;
+            max-width: 600px;
+            min-height: 400px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 30px;
+            position: relative;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .screen {
+            display: none;
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        h1 {
+            color: var(--primary);
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-between;
+            background: #E8F0FE;
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 14px;
+        }
+
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            margin: 10px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: calc(100% - 20px);
+            max-width: 300px;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .btn-choice {
+            background-color: #F8F9FA;
+            color: var(--text-main);
+            border: 2px solid #DEE2E6;
+            max-width: 100%;
+            display: block;
+            margin: 12px auto;
+        }
+
+        .btn-choice:hover {
+            background-color: #E2E6EA;
+            border-color: #DAE0E5;
+        }
+
+        .hint-box {
+            background-color: #FFF3CD;
+            color: #856404;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-weight: bold;
+            display: none;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* 視覚的フィードバック（⭕️❌）のアニメーション */
+        #feedback-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 120px;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 100;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes feedbackAnim {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .animate-feedback {
+            animation: feedbackAnim 1s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="screen-menu" class="screen active">
+        <h1>🎓 情報I: 知的財産権マスター</h1>
+        <p>参考動画から出題！<br>楽しく権利について学ぼう。</p>
+        
+        <div class="stats-bar" style="justify-content: center; margin-top: 20px;">
+            <span id="total-score-display">累計スコア: 0</span>
+        </div>
+
+        <h3 style="color: #666; margin-top:30px;">難易度を選択してスタート</h3>
+        <button class="btn" onclick="startGame('easy')">🟢 イージー (2択)</button>
+        <button class="btn" onclick="startGame('hard')" style="background-color: #E67E22;">🔥 ハード (4択)</button>
+    </div>
+
+    <div id="screen-game" class="screen">
+        <div class="stats-bar">
+            <span id="progress-text">問題: 1 / 5</span>
+            <span id="score-text">スコア: 0</span>
+        </div>
+        <h2 id="question-text">ここに問題文が表示されます</h2>
+        <div id="choices-container">
+            </div>
+        <div id="hint-container" class="hint-box">
+            💡 ヒント: <span id="hint-text"></span>
+        </div>
+    </div>
+
+    <div id="screen-result" class="screen">
+        <h1>🎉 ゲームクリア！</h1>
+        <h2 id="final-score-text" style="font-size: 28px; color: var(--primary);">スコア: 100</h2>
+        <p id="result-message" style="margin-bottom: 30px;"></p>
+        
+        <button class="btn" onclick="showMenu()">🏠 メニューに戻る</button>
+    </div>
+
+    <div id="feedback-overlay"></div>
+</div>
+
+<script>
+    // --- データベース（動画内容に基づく問題） ---
+    const allQuestions = [
+        {
+            q: "創作活動から生まれた価値（発明やアイデア、デザインなど）を保護するための権利の総称は？",
+            options: ["知的財産権", "産業財産権", "著作権", "所有権"],
+            ans: 0,
+            hint: "「知的な」活動から生まれた財産を守るための大きな枠組みだよ。"
+        },
+        {
+            q: "産業財産権のうち、新しく作られた高度な技術や発明（例：5G通信や小型電池）を保護する権利は？",
+            options: ["特許権", "実用新案権", "意匠権", "商標権"],
+            ans: 0,
+            hint: "出願から「20年間」保護される、ビジネスにおいて非常に強力な権利だよ。"
+        },
+        {
+            q: "著作権が権利として発生するタイミングとして正しいものは？",
+            options: ["著作物が創作された時", "特許庁に出願した時", "役所に申請した時", "著作物が販売された時"],
+            ans: 0,
+            hint: "著作権は「無方式主義」と呼ばれ、手続きや登録をしなくても自動的に発生するよ。"
+        },
+        {
+            q: "他人の著作物を「引用」する際のルールとして【間違っているもの】はどれ？",
+            options: ["出所（出典）を書かなくてもよい", "引用する必然性があること", "自分の文章と明確に区別できること", "引用部分が全体の一部（従）にとどまること"],
+            ans: 0,
+            hint: "どこから持ってきた情報なのか、出所を明記することは絶対に必要だよ。"
+        },
+        {
+            q: "産業財産権のうち、商品やサービスを識別するための「マーク」や「ブランド名」を保護する権利は？",
+            options: ["商標権", "意匠権", "実用新案権", "特許権"],
+            ans: 0,
+            hint: "企業のロゴマークなどがこれに該当するよ。更新手続きをすればずっと持ち続けられるよ。"
+        },
+        {
+            q: "映画館で映画を無断で盗撮（録画）した場合の罰則（目安）はどれ？",
+            options: ["10年以下の懲役や1000万円以下の罰金", "5年以下の懲役や500万円以下の罰金", "罰金100万円のみ", "特に罰則はない"],
+            ans: 0,
+            hint: "非常に重い罰則が課せられるよ。動画の冒頭で紹介されていたね。"
+        },
+        {
+            q: "自分が買った音楽データを、自分だけで楽しむためにUSBメモリにコピーするのはOK？",
+            options: ["OK（私的使用のための複製）", "NG（一切のコピーは禁止）", "著作者の許可を取ればNG", "友達に渡さなければNG"],
+            ans: 0,
+            hint: "自分や家族など、ごく限られた範囲で楽しむためのコピーは例外的に認められているよ。"
+        },
+        {
+            q: "産業財産権は自分から特許庁に届け出る必要があるため「方式主義」と呼ばれるが、著作権の発生方式は何と呼ばれる？",
+            options: ["無方式主義", "自動発生主義", "絶対主義", "表現主義"],
+            ans: 0,
+            hint: "方式（手続き）が無いので、「無○○主義」と呼ばれるよ。"
+        }
+    ];
+
+    // --- ゲーム状態管理 ---
+    let currentMode = 'easy'; // 'easy' or 'hard'
+    let gameQuestions = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let mistakesOnCurrent = 0;
+    
+    // Web Audio API Context (ユーザーアクション後に初期化)
+    let audioCtx = null;
+
+    // 初期化・ローカルストレージからの読み込み
+    let totalScore = localStorage.getItem('info1_totalScore') ? parseInt(localStorage.getItem('info1_totalScore')) : 0;
+    document.getElementById('total-score-display').innerText = `累計スコア: ${totalScore}`;
+
+    // --- 効果音再生機能 ---
+    function playSound(type) {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        if (type === 'correct') {
+            // ピンポン♪
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+            osc.frequency.setValueAtTime(1108.73, audioCtx.currentTime + 0.1); // C#6
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        } else if (type === 'wrong') {
+            // ブー！
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(250, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.3);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+    }
+
+    // --- ゲーム進行制御 ---
+    function switchScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    function showMenu() {
+        document.getElementById('total-score-display').innerText = `累計スコア: ${totalScore}`;
+        switchScreen('screen-menu');
+    }
+
+    // 配列のシャッフル機能
+    function shuffleArray(array) {
+        let curId = array.length;
+        while (0 !== curId) {
+            let randId = Math.floor(Math.random() * curId);
+            curId -= 1;
+            let tmp = array[curId];
+            array[curId] = array[randId];
+            array[randId] = tmp;
+        }
+        return array;
+    }
+
+    function startGame(mode) {
+        currentMode = mode;
+        score = 0;
+        currentQuestionIndex = 0;
+        
+        // 問題を5問ランダムに抽出
+        let shuffledAll = shuffleArray([...allQuestions]);
+        gameQuestions = shuffledAll.slice(0, 5);
+        
+        switchScreen('screen-game');
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        mistakesOnCurrent = 0;
+        document.getElementById('hint-container').style.display = 'none';
+        
+        const qData = gameQuestions[currentQuestionIndex];
+        document.getElementById('question-text').innerText = qData.q;
+        document.getElementById('progress-text').innerText = `問題: ${currentQuestionIndex + 1} / ${gameQuestions.length}`;
+        document.getElementById('score-text').innerText = `スコア: ${score}`;
+
+        const choicesContainer = document.getElementById('choices-container');
+        choicesContainer.innerHTML = ''; // クリア
+
+        // 選択肢の生成 (イージーは2択、ハードは4択)
+        let optionsToDisplay = [];
+        let correctOption = qData.options[qData.ans];
+        
+        if (currentMode === 'easy') {
+            // 正解と、ランダムな不正解1つを選ぶ
+            let wrongOptions = qData.options.filter((opt, idx) => idx !== qData.ans);
+            optionsToDisplay.push({ text: correctOption, isCorrect: true });
+            optionsToDisplay.push({ text: wrongOptions[Math.floor(Math.random() * wrongOptions.length)], isCorrect: false });
+        } else {
+            // ハードは全て表示
+            qData.options.forEach((opt, idx) => {
+                optionsToDisplay.push({ text: opt, isCorrect: (idx === qData.ans) });
+            });
+        }
+
+        // 選択肢をシャッフルして表示
+        shuffleArray(optionsToDisplay).forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-choice';
+            btn.innerText = opt.text;
+            btn.onclick = () => checkAnswer(btn, opt.isCorrect, qData.hint);
+            choicesContainer.appendChild(btn);
+        });
+    }
+
+    function checkAnswer(btnElement, isCorrect, hintText) {
+        const feedbackOverlay = document.getElementById('feedback-overlay');
+        
+        // アニメーションのリセット
+        feedbackOverlay.classList.remove('animate-feedback');
+        void feedbackOverlay.offsetWidth; // リフローを強制
+
+        if (isCorrect) {
+            playSound('correct');
+            feedbackOverlay.innerText = '⭕️';
+            feedbackOverlay.style.color = 'var(--success)';
+            feedbackOverlay.classList.add('animate-feedback');
+            
+            // スコア加算（ミスなしなら高得点）
+            let points = currentMode === 'hard' ? 20 : 10;
+            if (mistakesOnCurrent > 0) points = Math.floor(points / 2);
+            score += points;
+
+            // 次の問題へ（少し遅延を入れる）
+            setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex < gameQuestions.length) {
+                    loadQuestion();
+                } else {
+                    endGame();
+                }
+            }, 800);
+
+        } else {
+            playSound('wrong');
+            mistakesOnCurrent++;
+            feedbackOverlay.innerText = '❌';
+            feedbackOverlay.style.color = 'var(--danger)';
+            feedbackOverlay.classList.add('animate-feedback');
+            
+            btnElement.style.backgroundColor = '#FFCDD2';
+            btnElement.style.borderColor = '#E57373';
+            btnElement.disabled = true; // 同じボタンを二度押せないようにする
+
+            // ヒントの表示（1回ミスしたら即座にヒントを表示してサポート）
+            if (mistakesOnCurrent >= 1) {
+                const hintContainer = document.getElementById('hint-container');
+                document.getElementById('hint-text').innerText = hintText;
+                hintContainer.style.display = 'block';
+            }
+        }
+    }
+
+    function endGame() {
+        // 成績のセーブ
+        totalScore += score;
+        localStorage.setItem('info1_totalScore', totalScore);
+
+        document.getElementById('final-score-text').innerText = `最終スコア: ${score} 点`;
+        
+        let msg = "";
+        let maxScore = currentMode === 'hard' ? 100 : 50;
+        
+        if (score === maxScore) {
+            msg = "完璧！知的財産権の知識はバッチリだね！✨";
+        } else if (score >= maxScore * 0.6) {
+            msg = "素晴らしい！あともう少しでマスターだ！👍";
+        } else {
+            msg = "ナイストライ！動画を見直してもう一度挑戦してみよう！📚";
+        }
+        document.getElementById('result-message').innerText = msg;
+
+        switchScreen('screen-result');
+    }
+</script>
+</body>
+</html>
