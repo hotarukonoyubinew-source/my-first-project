@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>A/Dコンバーター・マスター！〜音をデジタル化せよ〜</title>
+<style>
+  :root {
+    --bg: #020617;
+    --container: #0f172a;
+    --primary: #38bdf8;
+    --success: #4ade80;
+    --error: #f87171;
+    --warning: #facc15;
+    --text: #f8fafc;
+  }
+  
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 500px;
+    height: 100%;
+    max-height: 850px;
+    background: var(--container);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+  }
+
+  .screen {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  .screen.active {
+    display: flex;
+  }
+
+  h1 {
+    text-align: center;
+    color: var(--primary);
+    font-size: 26px;
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+    margin-bottom: 5px;
+  }
+  h1 small {
+    font-size: 16px;
+    color: var(--text);
+  }
+
+  button {
+    background: var(--primary);
+    color: #000;
+    border: none;
+    padding: 15px;
+    font-size: 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin: 8px 0;
+    font-weight: bold;
+    transition: transform 0.1s, background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 0 #0284c7;
+  }
+  button:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 #0284c7;
+  }
+  button.danger {
+    background: var(--error);
+    box-shadow: 0 4px 0 #b91c1c;
+    color: white;
+  }
+  button.danger:active {
+    box-shadow: 0 0 0 #b91c1c;
+  }
+  button.success {
+    background: var(--success);
+    box-shadow: 0 4px 0 #16a34a;
+    font-size: 24px;
+    padding: 20px;
+  }
+  button.success:active {
+    box-shadow: 0 0 0 #16a34a;
+  }
+
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    padding: 10px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 8px;
+  }
+  .hud #combo { color: var(--success); }
+  .hud #score { color: var(--warning); }
+
+  canvas {
+    background: var(--bg);
+    border: 2px solid #334155;
+    border-radius: 8px;
+    width: 100%;
+    height: 250px;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+  }
+
+  .instruction {
+    text-align: center;
+    font-size: 17px;
+    font-weight: bold;
+    margin: 15px 0;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e293b;
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  .controls {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .row {
+    display: flex;
+    gap: 10px;
+  }
+  .row button {
+    flex: 1;
+    height: 80px;
+    font-size: 24px;
+  }
+
+  .binary-display {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .binary-display span {
+    display: inline-block;
+    width: 40px;
+    height: 50px;
+    line-height: 50px;
+    text-align: center;
+    font-size: 32px;
+    font-family: monospace;
+    background: #1e293b;
+    border: 2px solid var(--primary);
+    border-radius: 8px;
+    color: var(--warning);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+  }
+
+  .hint-box {
+    display: none;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid var(--error);
+    color: var(--error);
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: bold;
+    animation: fadeIn 0.3s;
+    margin-top: 5px;
+  }
+
+  #final-binary-data {
+    font-family: monospace;
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 18px;
+    color: var(--success);
+    line-height: 1.8;
+    text-align: center;
+  }
+
+  #flash-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; opacity: 0; z-index: 5;
+    transition: opacity 0.2s;
+  }
+  #phase-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(2, 6, 23, 0.9); color: var(--primary);
+    font-size: 28px; font-weight: bold;
+    display: flex; justify-content: center; align-items: center; text-align: center;
+    opacity: 0; pointer-events: none; z-index: 10;
+    transition: opacity 0.3s;
+    white-space: pre-wrap;
+  }
+  #phase-overlay.show {
+    opacity: 1; pointer-events: all;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .setting-box {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: left;
+    margin: 10px 0;
+    border: 1px solid #334155;
+  }
+  .setting-box select {
+    width: 100%;
+    font-size: 16px;
+    padding: 8px;
+    border-radius: 4px;
+    background: #0f172a;
+    color: var(--text);
+    border: 1px solid var(--primary);
+    margin-top: 5px;
+    cursor: pointer;
+  }
+  .setting-label {
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--primary);
+  }
+
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="flash-overlay"></div>
+  <div id="phase-overlay"></div>
+
+  <div id="start-screen" class="screen active">
+    <h1>A/Dコンバーター・マスター！<br><small>〜音をデジタル化せよ〜</small></h1>
+    <div style="background: #1e293b; padding: 15px; border-radius: 8px; margin-top: 10px;">
+      <p style="margin:0; font-size:14px; text-align:center;">全2回のWAVEで音をデジタル化！<br>連続正解で高得点、ミスで減点だ！</p>
+    </div>
+
+    <div class="setting-box">
+      <div class="setting-label">1. 標本化の数 (サンプリング間隔)</div>
+      <select id="sampling-count">
+        <option value="3">3個（少ない・簡単）</option>
+        <option value="5" selected>5個（普通）</option>
+        <option value="8">8個（多い・難しい）</option>
+      </select>
+    </div>
+
+    <div class="setting-box">
+      <div class="setting-label">2. 量子化のレベル (ビット数)</div>
+      <select id="bit-depth-select">
+        <option value="1">1bit (2段階・シンプル)</option>
+        <option value="2">2bit (4段階・普通)</option>
+        <option value="3" selected>3bit (8段階・細かい)</option>
+      </select>
+    </div>
+    
+    <button class="success" onclick="startGame()">GAME START</button>
+    
+    <div style="text-align: center; margin-top: 20px; font-size: 18px; font-weight: bold;">
+      👑 ハイスコア: <span id="high-score-display">0</span>
+    </div>
+  </div>
+
+  <div id="game-screen" class="screen">
+    <div class="hud">
+      <div>SCORE: <span id="score">0</span></div>
+      <div>COMBO: <span id="combo">0</span></div>
+      <div>WAVE: <span id="wave-display">1 / 2</span></div>
+    </div>
+
+    <canvas id="gameCanvas" width="400" height="250"></canvas>
+
+    <div class="instruction" id="instruction">指示テキスト</div>
+
+    <div id="controls-sampling" class="controls" style="display:none;">
+      <button id="btn-tap" style="height: 100px; font-size: 28px; background: var(--warning); box-shadow: 0 4px 0 #ca8a04; border-radius: 50px;">TAP!</button>
+    </div>
+
+    <div id="controls-quantizing" class="controls" style="display:none;">
+      <div class="row">
+        <button id="btn-q1">レベル X</button>
+        <button id="btn-q2">レベル Y</button>
+      </div>
+    </div>
+
+    <div id="controls-encoding" class="controls" style="display:none;">
+      <div class="binary-display" id="binary-display"></div>
+      <div class="row">
+        <button id="btn-bin0" onclick="inputBinary('0')">0</button>
+        <button id="btn-bin1" onclick="inputBinary('1')">1</button>
+      </div>
+      <button class="danger" onclick="clearBinary()">やり直す (クリア)</button>
+      <div id="hint-box" class="hint-box"></div>
+    </div>
+  </div>
+
+  <div id="result-screen" class="screen">
+    <h1>GAME CLEAR!</h1>
+    <p style="text-align:center; font-size: 20px; margin: 10px 0 0 0;">最終スコア</p>
+    <p style="text-align:center; font-size: 48px; margin: 0; color: var(--warning); font-weight:bold;" id="final-score">0</p>
+    <p id="new-record" style="text-align:center; color: var(--success); font-weight: bold; display: none;">✨NEW RECORD!✨</p>
+    
+    <p style="text-align:center; font-weight:bold; margin-top:20px;">生成されたデジタルデータ</p>
+    <div id="final-binary-data"></div>
+    
+    <div style="flex:1;"></div>
+    <button onclick="showStartScreen()">タイトルに戻る</button>
+  </div>
+</div>
+
+<script>
+  let audioCtx;
+  function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function playSound(type) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    const now = audioCtx.currentTime;
+    if (type === 'correct') {
+      osc.type = 'sine'; osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(1600, now + 0.1);
+      gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+      osc.start(now); osc.stop(now + 0.1);
+    } else if (type === 'wrong') {
+      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now);
+      gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      osc.start(now); osc.stop(now + 0.3);
+    } else if (type === 'tap') {
+      osc.type = 'square'; osc.frequency.setValueAtTime(400, now);
+      gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+      osc.start(now); osc.stop(now + 0.05);
+    }
+  }
+
+  // --- Game Config ---
+  let state = 'MENU';
+  let score = 0;
+  let combo = 0;
+  let waveCount = 1;
+  const maxWaves = 2; // 回数を2回に変更
+  let bitDepth = 3;
+  let numLevels = 8;
+  const scannerSpeed = 2.2; 
+  let samplingCount = 5;
+  
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+
+  let wavePhase1, wavePhase2, waveAmp1, waveAmp2;
+  let targetXs = [];
+  let samples = []; 
+  let targetIndex = 0;
+  let scannerX = 0;
+  let allDigitalData = [];
+  let currentInput = "";
+  let targetBinary = "";
+  let animationFrameId;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    let high = localStorage.getItem('adGameHighScoreV3') || 0;
+    document.getElementById('high-score-display').innerText = high;
+    
+    document.getElementById('btn-tap').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      handleSamplingTap();
+    });
+  });
+
+  function showStartScreen() {
+    cancelAnimationFrame(animationFrameId);
+    state = 'MENU';
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById('start-screen').classList.add('active');
+    let high = localStorage.getItem('adGameHighScoreV3') || 0;
+    document.getElementById('high-score-display').innerText = high;
+  }
+
+  function startGame() {
+    initAudio();
+    samplingCount = parseInt(document.getElementById('sampling-count').value);
+    bitDepth = parseInt(document.getElementById('bit-depth-select').value);
+    numLevels = Math.pow(2, bitDepth);
+    
+    score = 0;
+    combo = 0;
+    waveCount = 1;
+    allDigitalData = [];
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById('game-screen').classList.add('active');
+    updateHUD();
+    startWave();
+    
+    let lastTime = performance.now();
+    function loop(timestamp) {
+      if (state !== 'MENU' && state !== 'GAMEOVER') {
+        update(timestamp - lastTime);
+        draw();
+      }
+      lastTime = timestamp;
+      animationFrameId = requestAnimationFrame(loop);
+    }
+    animationFrameId = requestAnimationFrame(loop);
+  }
+
+  function addScore(basePoint) {
+    combo++;
+    let add = basePoint + (combo * 20);
+    score += add;
+    updateHUD();
+  }
+
+  function subScore() {
+    combo = 0;
+    score -= 50;
+    if (score < 0) score = 0;
+    updateHUD();
+  }
+
+  function updateHUD() {
+    document.getElementById('score').innerText = score;
+    document.getElementById('combo').innerText = combo + " 連鎖!";
+    document.getElementById('wave-display').innerText = `${waveCount} / ${maxWaves}`;
+  }
+
+  function showFlash(color) {
+    const el = document.getElementById('flash-overlay');
+    el.style.backgroundColor = color === 'green' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(248, 113, 113, 0.4)';
+    el.style.opacity = '1';
+    setTimeout(() => el.style.opacity = '0', 200);
+  }
+
+  function showPhaseTransition(text, callback, delay = 1500) {
+    const overlay = document.getElementById('phase-overlay');
+    overlay.innerText = text;
+    overlay.classList.add('show');
+    setTimeout(() => {
+      overlay.classList.remove('show');
+      if(callback) callback();
+    }, delay);
+  }
+
+  function generateWave() {
+    wavePhase1 = Math.random() * Math.PI * 2;
+    wavePhase2 = Math.random() * Math.PI * 2;
+    waveAmp1 = 0.4 + Math.random() * 0.4;
+    waveAmp2 = 0.2 + Math.random() * 0.4;
+  }
+
+  function getWaveY(x) {
+    let nx = x / w;
+    let val = Math.sin(nx * Math.PI * 2 * 2 + wavePhase1) * waveAmp1 
+            + Math.cos(nx * Math.PI * 2 * 3 + wavePhase2) * waveAmp2;
+    // 0.0 ~ 1.0 に正規化 (少しマージンを持たせる)
+    let normalizedY = (val + 1.5) / 3;
+    if (normalizedY < 0.1) normalizedY = 0.1;
+    if (normalizedY > 0.9) normalizedY = 0.9;
+    return normalizedY * h;
+  }
+
+  function getYFromLevel(level) {
+    if (numLevels === 1) return h / 2;
+    return h - level * (h / (numLevels - 1));
+  }
+  function getExactLevelFromY(y) {
+    if (numLevels === 1) return 0;
+    return (h - y) / (h / (numLevels - 1));
+  }
+
+  function startWave() {
+    generateWave();
+    samples = [];
+    targetXs = [];
+    let step = w / samplingCount;
+    for (let i = 0; i < samplingCount; i++) {
+      targetXs.push((i + 0.5) * step);
+    }
+    targetIndex = 0;
+    scannerX = 0;
+    document.getElementById('controls-sampling').style.display = 'flex';
+    document.getElementById('controls-quantizing').style.display = 'none';
+    document.getElementById('controls-encoding').style.display = 'none';
+    document.getElementById('instruction').innerText = "【STEP1: 標本化】線が緑のゾーンに入ったらTAP！";
+    state = 'WAITING';
+    showPhaseTransition(`WAVE ${waveCount}\nSTEP 1: 標本化`, () => {
+      state = 'SAMPLING';
+    });
+  }
+
+  function handleSamplingTap() {
+    if (state !== 'SAMPLING') return;
+    let dist = Math.abs(scannerX - targetXs[targetIndex]);
+    if (dist <= 25) {
+      let y = getWaveY(targetXs[targetIndex]);
+      samples.push({ x: targetXs[targetIndex], exactY: y });
+      playSound('correct');
+      showFlash('green');
+      addScore(50);
+      targetIndex++;
+      if (targetIndex >= targetXs.length) {
+        startQuantizing();
+      }
+    } else {
+      subScore();
+      playSound('wrong');
+      showFlash('red');
+      scannerX -= 40;
+      if (scannerX < 0) scannerX = 0;
+    }
+  }
+
+  function startQuantizing() {
+    state = 'WAITING';
+    document.getElementById('controls-sampling').style.display = 'none';
+    showPhaseTransition("STEP 2: 量子化", () => {
+      state = 'QUANTIZING';
+      targetIndex = 0;
+      setupQuantizeUI();
+    });
+  }
+
+  function setupQuantizeUI() {
+    document.getElementById('controls-quantizing').style.display = 'flex';
+    document.getElementById('instruction').innerHTML = `【STEP2: 量子化】赤い点に<span style="color:#f87171;">最も近い電圧</span>を選べ！`;
+    
+    let exactL = getExactLevelFromY(samples[targetIndex].exactY);
+    let correctL = Math.round(exactL);
+    
+    // 選択肢の生成
+    let lowL = Math.floor(exactL);
+    let highL = Math.ceil(exactL);
+    
+    // 全く同じレベルを指している場合の処理（境界付近）
+    if (lowL === highL) {
+      if (highL < numLevels - 1) highL++;
+      else lowL--;
+    }
+    
+    // 範囲外チェック
+    lowL = Math.max(0, Math.min(numLevels - 1, lowL));
+    highL = Math.max(0, Math.min(numLevels - 1, highL));
+
+    let isLowLeft = Math.random() > 0.5;
+    let btn1L = isLowLeft ? lowL : highL;
+    let btn2L = isLowLeft ? highL : lowL;
+    
+    const btn1 = document.getElementById('btn-q1');
+    const btn2 = document.getElementById('btn-q2');
+    btn1.innerText = `レベル ${btn1L}`;
+    btn1.onclick = () => handleQuantizeSelection(btn1L, correctL);
+    btn2.innerText = `レベル ${btn2L}`;
+    btn2.onclick = () => handleQuantizeSelection(btn2L, correctL);
+  }
+
+  function handleQuantizeSelection(selected, correct) {
+    if (selected === correct) {
+      playSound('correct'); showFlash('green');
+      samples[targetIndex].quantizedLevel = selected;
+      addScore(50);
+      targetIndex++;
+      if (targetIndex >= samples.length) {
+        showQuantizedResult();
+      } else {
+        setupQuantizeUI();
+      }
+    } else {
+      playSound('wrong'); showFlash('red');
+      subScore();
+    }
+  }
+
+  function showQuantizedResult() {
+    state = 'SHOW_QUANTIZED_RESULT';
+    document.getElementById('controls-quantizing').style.display = 'none';
+    document.getElementById('instruction').innerHTML = "量子化完了！アナログのなめらかさが失われた。";
+    playSound('correct');
+    setTimeout(() => { startEncoding(); }, 2500);
+  }
+
+  function startEncoding() {
+    state = 'WAITING';
+    showPhaseTransition("STEP 3: 符号化", () => {
+      state = 'ENCODING';
+      targetIndex = 0;
+      document.getElementById('controls-encoding').style.display = 'flex';
+      setupEncodingUI();
+    });
+  }
+
+  function setupEncodingUI() {
+    let level = samples[targetIndex].quantizedLevel;
+    targetBinary = level.toString(2).padStart(bitDepth, '0');
+    currentInput = "";
+    updateBinaryDisplay();
+    document.getElementById('instruction').innerHTML = `【STEP3: 符号化】値「<span style="color:#facc15; font-size:24px;">${level}</span>」を2進数（${bitDepth}桁）に変換せよ！`;
+    document.getElementById('hint-box').style.display = 'none';
+  }
+
+  function updateBinaryDisplay() {
+    let html = "";
+    for(let i = 0; i < bitDepth; i++) {
+      let char = currentInput[i] !== undefined ? currentInput[i] : "";
+      html += `<span>${char}</span>`;
+    }
+    document.getElementById('binary-display').innerHTML = html;
+  }
+
+  function inputBinary(bit) {
+    if (state !== 'ENCODING') return;
+    if (currentInput.length < bitDepth) {
+      currentInput += bit;
+      updateBinaryDisplay();
+      playSound('tap');
+    }
+    if (currentInput.length === bitDepth) {
+      setTimeout(checkBinary, 150);
+    }
+  }
+
+  function clearBinary() {
+    if (state !== 'ENCODING') return;
+    currentInput = "";
+    updateBinaryDisplay();
+    playSound('tap');
+  }
+
+  function checkBinary() {
+    if (currentInput === targetBinary) {
+      playSound('correct'); showFlash('green');
+      samples[targetIndex].binaryStr = currentInput;
+      addScore(50);
+      targetIndex++;
+      if (targetIndex >= samples.length) {
+        showEncodedResult();
+      } else {
+        setupEncodingUI();
+      }
+    } else {
+      playSound('wrong'); showFlash('red');
+      subScore();
+      currentInput = "";
+      updateBinaryDisplay();
+      const hintBox = document.getElementById('hint-box');
+      hintBox.style.display = 'block';
+      hintBox.innerHTML = `ミス！値「${samples[targetIndex].quantizedLevel}」は2進数で『${targetBinary}』だ！`;
+    }
+  }
+
+  function showEncodedResult() {
+    state = 'SHOW_ENCODED_RESULT';
+    document.getElementById('controls-encoding').style.display = 'none';
+    let binArray = samples.map(s => s.binaryStr);
+    let binStr = binArray.join(' ');
+    allDigitalData.push(`WAVE ${waveCount}: <span style="color:#fff;">${binStr}</span>`);
+    document.getElementById('instruction').innerHTML = `デジタル化成功！<br><span style="color:var(--warning); font-size:20px; font-family:monospace; letter-spacing:2px;">${binStr}</span>`;
+    playSound('correct');
+    setTimeout(() => {
+      waveCount++;
+      if (waveCount > maxWaves) endGame();
+      else startWave();
+    }, 3000);
+  }
+
+  function update(dt) {
+    if (state === 'SAMPLING') {
+      scannerX += scannerSpeed;
+      if (scannerX > targetXs[targetIndex] + 25) {
+        subScore();
+        playSound('wrong');
+        showFlash('red');
+        scannerX -= 50; 
+      }
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    
+    // --- Grid Drawing ---
+    ctx.lineWidth = 1;
+    for(let i = 0; i < numLevels; i++) {
+      let y = getYFromLevel(i);
+      ctx.strokeStyle = (['QUANTIZING', 'SHOW_QUANTIZED_RESULT', 'ENCODING', 'SHOW_ENCODED_RESULT'].includes(state)) ? '#475569' : '#1e293b';
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px sans-serif';
+      ctx.fillText(i, 5, y - 4);
+    }
+
+    // --- Vertical Sampling Lines ---
+    for(let i = 0; i < targetXs.length; i++) {
+      let tx = targetXs[i];
+      if (state === 'SAMPLING' && i === targetIndex) {
+        ctx.fillStyle = 'rgba(74, 222, 128, 0.15)';
+        ctx.fillRect(tx - 20, 0, 40, h);
+        ctx.strokeStyle = '#4ade80';
+      } else {
+        ctx.strokeStyle = '#334155';
+      }
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.moveTo(tx, 0); ctx.lineTo(tx, h); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // --- Original Analog Wave ---
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for(let x = 0; x <= w; x += 2) {
+      if(x === 0) ctx.moveTo(x, getWaveY(x));
+      else ctx.lineTo(x, getWaveY(x));
+    }
+    ctx.stroke();
+
+    // --- Digital Staircase Wave ---
+    if (['SHOW_QUANTIZED_RESULT', 'ENCODING', 'SHOW_ENCODED_RESULT'].includes(state)) {
+      ctx.strokeStyle = '#f87171';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      let firstSample = true;
+      for(let i = 0; i < samples.length; i++) {
+        let s = samples[i];
+        if (s.quantizedLevel !== undefined) {
+          let py = getYFromLevel(s.quantizedLevel);
+          if (firstSample) { ctx.moveTo(s.x, py); firstSample = false; }
+          else {
+            // ステップ状に描画
+            let prevS = samples[i-1];
+            ctx.lineTo(s.x, getYFromLevel(prevS.quantizedLevel));
+            ctx.lineTo(s.x, py);
+          }
+        }
+      }
+      ctx.stroke();
+    }
+
+    // --- Points Drawing ---
+    for(let i = 0; i < samples.length; i++) {
+      let s = samples[i];
+      let px = s.x;
+      let py = (s.quantizedLevel !== undefined) ? getYFromLevel(s.quantizedLevel) : s.exactY;
+      
+      if (state === 'QUANTIZING' && i === targetIndex) ctx.fillStyle = '#f87171';
+      else if (state === 'ENCODING' && i === targetIndex) ctx.fillStyle = '#facc15';
+      else ctx.fillStyle = '#4ade80';
+      
+      ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+      
+      if (s.binaryStr) {
+        ctx.fillStyle = '#facc15';
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText(s.binaryStr, px - 10, py - 12);
+      }
+    }
+
+    // --- Scanner ---
+    if (state === 'SAMPLING') {
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(scannerX, 0); ctx.lineTo(scannerX, h); ctx.stroke();
+      ctx.fillStyle = 'rgba(250, 204, 21, 0.3)';
+      ctx.fillRect(scannerX - 5, 0, 10, h);
+    }
+  }
+
+  function endGame() {
+    state = 'GAMEOVER';
+    playSound('correct');
+    document.getElementById('game-screen').classList.remove('active');
+    document.getElementById('result-screen').classList.add('active');
+    document.getElementById('final-score').innerText = score;
+    document.getElementById('final-binary-data').innerHTML = allDigitalData.join('<br>');
+    
+    let high = parseInt(localStorage.getItem('adGameHighScore(' + bitDepth + 'bit)') || "0");
+    if (score > high) {
+      localStorage.setItem('adGameHighScore(' + bitDepth + 'bit)', score);
+      document.getElementById('new-record').style.display = 'block';
+    } else {
+      document.getElementById('new-record').style.display = 'none';
+    }
+  }
+</script>
+</body>
+</html>
